@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Frontend Build
+frontend/dist/
+dist/
+
+# Environment variables
+.env
+*.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Databases
+*.db
+backend/anemia.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Artifacts
+*.zip
+backend.zip
+frontend.zip
+
+# Testing
+.pytest_cache/
+.hypothesis/
+
+# Backend Specific
+backend/retrain_uploads/
+backend/scratch/
