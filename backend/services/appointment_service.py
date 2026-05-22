@@ -204,6 +204,14 @@ def request_appointment(
                     f"slot_time {slot_time} is outside doctor's available hours "
                     f"({day_schedule['start']}–{day_schedule['end']})."
                 )
+        else:
+            # Default: allow 09:00-17:00 any day
+            slot_start = _parse_time_minutes(slot_time)
+            slot_end = slot_start + SLOT_DURATION_MIN
+            if slot_start < 540 or slot_end > 1020:  # 09:00=540, 17:00=1020
+                raise ValueError(
+                    f"slot_time {slot_time} is outside default hours (09:00–17:00)."
+                )
 
         # Check for conflicts
         if has_conflict(doctor_id, slot_date, slot_time):
@@ -492,8 +500,9 @@ def get_available_slots(doctor_id: int, date_str: str) -> list[dict]:
         day_abbr = _day_of_week(date_str)
         day_schedule = available_hours.get(day_abbr)
 
+        # Default to 09:00-17:00 if no schedule configured
         if not day_schedule:
-            return []
+            day_schedule = {"start": "09:00", "end": "17:00"}
 
         day_start = _parse_time_minutes(day_schedule["start"])
         day_end = _parse_time_minutes(day_schedule["end"])

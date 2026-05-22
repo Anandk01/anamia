@@ -270,6 +270,15 @@ export default function PatientDashboard() {
           {view === 'progress' && <HbTrendChart username={username} source="doctor" />}
           {view === 'appointments' && (
             <>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-800">Appointments</h2>
+                <button
+                  onClick={() => setShowBooking(true)}
+                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
+                >
+                  + Book Appointment
+                </button>
+              </div>
               <AppointmentCalendar
                 onSlotClick={(slot) => { setBookingSlot(slot); setShowBooking(true); }}
               />
