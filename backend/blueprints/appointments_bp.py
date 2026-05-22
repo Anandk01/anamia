@@ -4,18 +4,21 @@ Appointments Blueprint — /api/appointments
 Handles appointment booking, confirmation, cancellation, and calendar views.
 
 Routes:
-    POST /api/appointments/request                    → patient requests an appointment
+    POST /api/appointments/request                    → patient/admin requests an appointment
     GET  /api/appointments/calendar                   → calendar view (patient + doctor)
     GET  /api/appointments/<id>                       → get single appointment
     PUT  /api/appointments/<id>/confirm               → doctor confirms appointment
     PUT  /api/appointments/<id>/cancel                → patient or doctor cancels
     PUT  /api/appointments/<id>/complete              → doctor marks as completed
+    PUT  /api/appointments/<id>/reschedule            → doctor reschedules appointment
     GET  /api/appointments/available-slots            → patient views available slots
 """
 
+import smtplib
 from datetime import date, datetime, timedelta
+from email.mime.text import MIMEText
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 from db import get_db
 from middleware.auth import require_auth
@@ -41,6 +44,62 @@ def _get_user_id(username: str) -> int | None:
         conn.close()
 
 
+def _get_username_by_id(user_id: int) -> str | None:
+    """Look up username from user_id."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT username FROM user WHERE user_id = ?", (user_id,)).fetchone()
+        return row["username"] if row else None
+    finally:
+        conn.close()
+
+
+def _get_email_by_id(user_id: int) -> str | None:
+    """Look up email from user_id."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT email FROM user WHERE user_id = ?", (user_id,)).fetchone()
+        return row["email"] if row else None
+    finally:
+        conn.close()
+
+
+def _notify_user(username: str, ntype: str, title: str, message: str):
+    """Insert a notification for a user."""
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO notification (username, type, title, message) VALUES (?, ?, ?, ?)",
+            (username, ntype, title, message),
+        )
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+
+def _send_email_notification(to_email: str, subject: str, body: str):
+    """Send email notification using app SMTP config. Fails silently."""
+    try:
+        smtp_server = current_app.config.get("SMTP_SERVER", "smtp.gmail.com")
+        smtp_port = current_app.config.get("SMTP_PORT", 587)
+        email_addr = current_app.config.get("EMAIL_ADDRESS", "")
+        email_pass = current_app.config.get("EMAIL_PASSWORD", "")
+        if not email_addr or not email_pass or not to_email:
+            return
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = email_addr
+        msg["To"] = to_email
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+            server.starttls()
+            server.login(email_addr, email_pass)
+            server.sendmail(email_addr, [to_email], msg.as_string())
+    except Exception:
+        pass
+
+
 def _get_current_monday() -> str:
     """Return the current week's Monday as YYYY-MM-DD."""
     today = date.today()
@@ -54,23 +113,18 @@ def _get_current_monday() -> str:
 
 @appointments_bp.post("/request")
 @require_auth
-@require_role("patient")
+@require_role("patient", "admin")
 def request_appointment():
-    """Create a new pending appointment.
+    """Create a new pending appointment (or confirmed if admin-scheduled).
 
     Request JSON:
         {
             "doctor_id":  int  — the doctor's user_id,
+            "patient_id": int  — (admin only) the patient's user_id,
             "slot_date":  str  — date in YYYY-MM-DD format,
             "slot_time":  str  — time in HH:MM format,
             "notes":      str  — optional notes
         }
-
-    Response JSON (201):
-        {"status": "ok", "appointment": {...}}
-
-    Response JSON (400):
-        {"status": "error", "message": "..."}
     """
     data = request.get_json(silent=True) or {}
 
@@ -83,9 +137,18 @@ def request_appointment():
         return jsonify({"status": "error", "message": "doctor_id, slot_date, and slot_time are required"}), 400
 
     username = g.current_user["username"]
-    patient_id = _get_user_id(username)
-    if patient_id is None:
-        return jsonify({"status": "error", "message": "Patient user not found"}), 400
+    role = g.current_user["role"]
+
+    # Admin can schedule for any patient
+    if role == "admin":
+        patient_id = data.get("patient_id")
+        if not patient_id:
+            return jsonify({"status": "error", "message": "patient_id is required for admin scheduling"}), 400
+        patient_id = int(patient_id)
+    else:
+        patient_id = _get_user_id(username)
+        if patient_id is None:
+            return jsonify({"status": "error", "message": "Patient user not found"}), 400
 
     try:
         appointment = appointment_service.request_appointment(
@@ -97,6 +160,27 @@ def request_appointment():
         )
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+    # If admin scheduled, auto-confirm
+    if role == "admin":
+        conn = get_db()
+        try:
+            conn.execute(
+                "UPDATE appointment SET status = 'confirmed', confirmed_at = datetime('now') WHERE appointment_id = ?",
+                (appointment["appointment_id"],),
+            )
+            conn.commit()
+            appointment["status"] = "confirmed"
+        finally:
+            conn.close()
+
+    # Notify doctor about new appointment request
+    doctor_username = _get_username_by_id(int(doctor_id))
+    patient_username = _get_username_by_id(patient_id)
+    if doctor_username:
+        _notify_user(doctor_username, "appointment",
+                     "New Appointment Request",
+                     f"Patient {patient_username or 'unknown'} has requested an appointment on {slot_date} at {slot_time}")
 
     return jsonify({"status": "ok", "appointment": appointment}), 201
 
@@ -191,20 +275,23 @@ def get_appointment(appointment_id: int):
 @require_auth
 @require_role("doctor")
 def confirm_appointment(appointment_id: int):
-    """Confirm a pending appointment.
-
-    Response JSON (200):
-        {"status": "ok", "appointment": {...}}
-
-    Response JSON (400):
-        {"status": "error", "message": "..."}
-    """
+    """Confirm a pending appointment and notify patient."""
     username = g.current_user["username"]
 
     try:
         appointment = appointment_service.confirm_appointment(appointment_id, username)
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+    # Notify patient
+    patient_username = _get_username_by_id(appointment.get("patient_id"))
+    if patient_username:
+        _notify_user(patient_username, "appointment", "Appointment Confirmed",
+                     f"Dr. {username} has confirmed your appointment on {appointment.get('slot_date')} at {appointment.get('slot_time')}")
+        patient_email = _get_email_by_id(appointment.get("patient_id"))
+        if patient_email:
+            _send_email_notification(patient_email, "Appointment Confirmed",
+                                     f"Your appointment with Dr. {username} on {appointment.get('slot_date')} at {appointment.get('slot_time')} has been confirmed.")
 
     return jsonify({"status": "ok", "appointment": appointment}), 200
 
@@ -217,27 +304,109 @@ def confirm_appointment(appointment_id: int):
 @require_auth
 @require_role("patient", "doctor")
 def cancel_appointment(appointment_id: int):
-    """Cancel an appointment.
-
-    Request JSON (optional):
-        {"reason": str}
-
-    Response JSON (200):
-        {"status": "ok", "appointment": {...}}
-
-    Response JSON (400):
-        {"status": "error", "message": "..."}
-    """
+    """Cancel an appointment and notify the other party."""
     data = request.get_json(silent=True) or {}
     reason = data.get("reason")
     username = g.current_user["username"]
+    role = g.current_user["role"]
+
+    # Get appointment info before cancelling
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT patient_id, doctor_id, slot_date, slot_time FROM appointment WHERE appointment_id = ?", (appointment_id,)).fetchone()
+    finally:
+        conn.close()
 
     try:
         appointment = appointment_service.cancel_appointment(appointment_id, username, reason)
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
+    # Notify the other party
+    if row:
+        if role == "doctor":
+            patient_username = _get_username_by_id(row["patient_id"])
+            if patient_username:
+                msg = f"Dr. {username} has cancelled your appointment on {row['slot_date']} at {row['slot_time']}."
+                if reason:
+                    msg += f" Reason: {reason}"
+                _notify_user(patient_username, "appointment", "Appointment Cancelled", msg)
+                patient_email = _get_email_by_id(row["patient_id"])
+                if patient_email:
+                    _send_email_notification(patient_email, "Appointment Cancelled", msg)
+        else:
+            doctor_username = _get_username_by_id(row["doctor_id"])
+            if doctor_username:
+                _notify_user(doctor_username, "appointment", "Appointment Cancelled",
+                             f"Patient {username} has cancelled the appointment on {row['slot_date']} at {row['slot_time']}.")
+
     return jsonify({"status": "ok", "appointment": appointment}), 200
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/appointments/<id>/reschedule — doctor reschedules appointment
+# ---------------------------------------------------------------------------
+
+@appointments_bp.put("/<int:appointment_id>/reschedule")
+@require_auth
+@require_role("doctor")
+def reschedule_appointment(appointment_id: int):
+    """Reschedule: cancel old appointment, create new one with new date/time.
+
+    Request JSON:
+        {"new_date": "YYYY-MM-DD", "new_time": "HH:MM", "reason": "optional"}
+    """
+    data = request.get_json(silent=True) or {}
+    new_date = data.get("new_date")
+    new_time = data.get("new_time")
+    reason = data.get("reason", "Rescheduled by doctor")
+
+    if not new_date or not new_time:
+        return jsonify({"status": "error", "message": "new_date and new_time are required"}), 400
+
+    username = g.current_user["username"]
+    doctor_id = _get_user_id(username)
+
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT * FROM appointment WHERE appointment_id = ?", (appointment_id,)).fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "Appointment not found"}), 404
+        appt = dict(row)
+        if appt["doctor_id"] != doctor_id:
+            return jsonify({"status": "error", "message": "Not authorized"}), 403
+        if appt["status"] in ("cancelled", "completed"):
+            return jsonify({"status": "error", "message": "Cannot reschedule a cancelled/completed appointment"}), 400
+
+        # Cancel old
+        conn.execute(
+            "UPDATE appointment SET status = 'cancelled', cancellation_reason = ? WHERE appointment_id = ?",
+            (reason, appointment_id),
+        )
+        # Create new
+        cursor = conn.execute(
+            """INSERT INTO appointment (doctor_id, patient_id, slot_date, slot_time, status, notes)
+               VALUES (?, ?, ?, ?, 'pending', ?)""",
+            (doctor_id, appt["patient_id"], new_date, new_time, f"Rescheduled from {appt['slot_date']} {appt['slot_time']}"),
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        new_row = conn.execute("SELECT * FROM appointment WHERE appointment_id = ?", (new_id,)).fetchone()
+    finally:
+        conn.close()
+
+    # Notify patient
+    patient_username = _get_username_by_id(appt["patient_id"])
+    if patient_username:
+        msg = f"Dr. {username} has rescheduled your appointment to {new_date} at {new_time}."
+        if reason:
+            msg += f" Reason: {reason}"
+        _notify_user(patient_username, "appointment", "Appointment Rescheduled", msg)
+        patient_email = _get_email_by_id(appt["patient_id"])
+        if patient_email:
+            _send_email_notification(patient_email, "Appointment Rescheduled", msg)
+
+    return jsonify({"status": "ok", "appointment": dict(new_row)}), 200
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +519,7 @@ def get_available_slots():
 
 @appointments_bp.get("/doctors")
 @require_auth
-@require_role("patient")
+@require_role("patient", "admin")
 def list_doctors():
     """Return list of doctors available for appointment booking.
 

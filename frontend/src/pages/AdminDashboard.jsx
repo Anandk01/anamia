@@ -26,6 +26,7 @@ import Forum from '../components/Forum.jsx';
 import ArticleEditor from '../components/ArticleEditor.jsx';
 import ProfileSettings from '../components/ProfileSettings.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import StatusFooter from '../components/StatusFooter.jsx';
 
@@ -40,8 +41,8 @@ function HealthDot({ label, ok }) {
 
 function StatCard({ label, value, sub, color }) {
   return (
-    <div className="bg-white rounded-lg border border-slate-200 px-4 py-3">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</p>
+    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 shadow-md hover:scale-[1.02] transition-transform">
+      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{label}</p>
       <p className="text-2xl font-bold" style={{ color: color || '#1e293b' }}>{value ?? '—'}</p>
       {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
@@ -50,6 +51,74 @@ function StatCard({ label, value, sub, color }) {
 
 const SEVERITY_COLORS = { None: '#10b981', Mild: '#f59e0b', Moderate: '#f97316', Severe: '#ef4444' };
 const PIE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+function AdminScheduleAppointment() {
+  const [doctors, setDoctors] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [form, setForm] = useState({ doctor_id: '', patient_id: '', slot_date: '', slot_time: '' });
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    client.get('/api/users').then(res => {
+      const all = res.data?.users || [];
+      setDoctors(all.filter(u => u.role === 'doctor' && u.status === 'active'));
+      setPatients(all.filter(u => u.role === 'patient' && u.status === 'active'));
+    }).catch(() => {});
+  }, []);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setMsg(null);
+    try {
+      await client.post('/api/appointments/request', {
+        doctor_id: parseInt(form.doctor_id),
+        patient_id: parseInt(form.patient_id),
+        slot_date: form.slot_date,
+        slot_time: form.slot_time,
+      });
+      setMsg('Appointment scheduled (confirmed)');
+      setForm({ doctor_id: '', patient_id: '', slot_date: '', slot_time: '' });
+    } catch (err) {
+      setMsg(err.response?.data?.message || 'Failed');
+    }
+  }
+
+  return (
+    <div className="max-w-lg">
+      <h2 className="text-lg font-semibold text-slate-800 mb-4">Schedule Appointment</h2>
+      <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-md">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Doctor</label>
+          <select value={form.doctor_id} onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">Select doctor...</option>
+            {doctors.map(d => <option key={d.user_id} value={d.user_id}>{d.username}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Patient</label>
+          <select value={form.patient_id} onChange={e => setForm(f => ({ ...f, patient_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">Select patient...</option>
+            {patients.map(p => <option key={p.user_id} value={p.user_id}>{p.username}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Date</label>
+            <input type="date" value={form.slot_date} onChange={e => setForm(f => ({ ...f, slot_date: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Time</label>
+            <input type="time" value={form.slot_time} onChange={e => setForm(f => ({ ...f, slot_time: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+        {msg && <p className={`text-sm ${msg.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>{msg}</p>}
+        <button type="submit" className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold py-2 rounded-lg text-sm hover:opacity-90 transition">
+          Schedule (Auto-Confirm)
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -96,6 +165,7 @@ export default function AdminDashboard() {
   const NAV_ITEMS = [
     { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
     { id: 'users', label: 'Users', Icon: Users },
+    { id: 'schedule', label: 'Schedule Appt', Icon: Activity },
     { id: 'predictions', label: 'Predictions', Icon: Brain },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
     { id: 'comparison', label: 'Model Comparison', Icon: GitCompare },
@@ -143,7 +213,7 @@ export default function AdminDashboard() {
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
       {/* Sidebar */}
-      <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
+      <div className="flex flex-col flex-shrink-0 rounded-r-xl" style={{ width: '220px', backgroundColor: '#0f1117' }}>
         <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
@@ -185,15 +255,14 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: '#f8f9fa' }}>
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
         {/* Header */}
-        <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+        <div className="h-12 bg-gradient-to-r from-indigo-500 to-purple-600 border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
           <Breadcrumb items={['Admin', activeLabel]} />
           <div className="flex items-center gap-4">
             <HealthDot label="DB" ok={health.db} />
             <HealthDot label="Models" ok={health.rf && health.gb} />
-            <HealthDot label="WebSocket" ok={health.ws} />
-            <HealthDot label="Queue" ok={health.queue} />
+            <ThemeToggle />
             <NotificationBell />
           </div>
         </div>
@@ -371,6 +440,8 @@ export default function AdminDashboard() {
               )}
             </div>
           )}
+
+          {view === 'schedule' && <AdminScheduleAppointment />}
 
           {view === 'predictions' && (
             <div className="space-y-4">

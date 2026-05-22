@@ -244,6 +244,41 @@ def index():
 
 
 # ---------------------------------------------------------------------------
+# GET /api/retrain/metrics — model comparison metrics
+# ---------------------------------------------------------------------------
+
+@retrain_bp.get("/metrics")
+@require_auth
+@require_role("admin")
+def get_metrics():
+    """Return all model_metrics rows for model comparison."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT model_name, accuracy, precision_score, recall, f1_score, auc_roc,
+                      confusion_matrix, dataset_name, dataset_size, trained_at
+               FROM model_metrics ORDER BY trained_at DESC"""
+        ).fetchall()
+    finally:
+        conn.close()
+
+    import json as _json
+    models = []
+    for r in rows:
+        m = dict(r)
+        m["name"] = m.pop("model_name")
+        m["precision"] = m.pop("precision_score")
+        m["f1"] = m.pop("f1_score")
+        if m.get("confusion_matrix"):
+            try:
+                m["confusion_matrix"] = _json.loads(m["confusion_matrix"])
+            except (ValueError, TypeError):
+                m["confusion_matrix"] = None
+        models.append(m)
+    return jsonify({"status": "ok", "models": models}), 200
+
+
+# ---------------------------------------------------------------------------
 # Task 10.1 — POST /api/retrain/upload
 # ---------------------------------------------------------------------------
 

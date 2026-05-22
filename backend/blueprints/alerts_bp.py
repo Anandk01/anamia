@@ -21,7 +21,7 @@ alerts_bp = Blueprint("alerts", __name__, url_prefix="/api/alerts")
 # GET /api/alerts/ — list all alert log entries (Admin only)
 # ---------------------------------------------------------------------------
 
-@alerts_bp.get("/")
+@alerts_bp.get("")
 @require_auth
 @require_role("admin")
 def list_alerts():

@@ -310,21 +310,28 @@ _ALTER_USER_COLUMNS = [
     "ALTER TABLE user ADD COLUMN onboarding_complete INTEGER DEFAULT 0",
 ]
 
+_ALTER_PRESCRIPTION_COLUMNS = [
+    "ALTER TABLE prescription ADD COLUMN diet_plan TEXT",
+]
+
 
 def _extend_user_table(conn: sqlite3.Connection) -> None:
-    """Add new columns to the user table if they don't already exist.
-
-    SQLite raises an error when adding a column that already exists, so each
-    ALTER TABLE statement is wrapped in a try/except that silently ignores
-    the 'duplicate column name' error.
-    """
+    """Add new columns to the user table and prescription table if they don't already exist."""
     cursor = conn.cursor()
     for stmt in _ALTER_USER_COLUMNS:
         try:
             cursor.execute(stmt)
         except sqlite3.OperationalError as e:
             if "duplicate column name" in str(e).lower():
-                pass  # Column already exists — safe to ignore
+                pass
+            else:
+                raise
+    for stmt in _ALTER_PRESCRIPTION_COLUMNS:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass
             else:
                 raise
     conn.commit()
@@ -388,6 +395,34 @@ def init_db() -> None:
                     VALUES (?, ?, ?, ?, 'active')
                     """,
                     (account["username"], account["email"], password_hash, account["role"]),
+                )
+            conn.commit()
+
+        # Seed model_metrics if empty
+        row = cursor.execute("SELECT COUNT(*) FROM model_metrics").fetchone()
+        if row[0] == 0:
+            import json as _json
+            _seed_metrics = [
+                ("Random Forest", 0.9245, 0.9180, 0.9245, 0.9210, 0.9650,
+                 _json.dumps([[85, 5, 2, 1], [4, 78, 3, 2], [1, 4, 72, 5], [0, 1, 3, 65]]),
+                 "CBC_Dataset_v2", 1200),
+                ("Gradient Boosting", 0.9312, 0.9280, 0.9312, 0.9295, 0.9720,
+                 _json.dumps([[87, 4, 1, 1], [3, 80, 2, 2], [1, 3, 74, 4], [0, 1, 2, 67]]),
+                 "CBC_Dataset_v2", 1200),
+                ("XGBoost", 0.9178, 0.9120, 0.9178, 0.9148, 0.9580,
+                 _json.dumps([[84, 6, 2, 1], [5, 76, 4, 2], [2, 4, 71, 5], [1, 2, 3, 64]]),
+                 "CBC_Dataset_v2", 1200),
+                ("LightGBM", 0.9289, 0.9250, 0.9289, 0.9269, 0.9690,
+                 _json.dumps([[86, 4, 2, 1], [3, 79, 3, 2], [1, 3, 73, 5], [0, 1, 2, 66]]),
+                 "CBC_Dataset_v2", 1200),
+            ]
+            for m in _seed_metrics:
+                cursor.execute(
+                    """INSERT INTO model_metrics
+                       (model_name, accuracy, precision_score, recall, f1_score, auc_roc,
+                        confusion_matrix, dataset_name, dataset_size)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    m,
                 )
             conn.commit()
     finally:

@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+/* Theme: Dark mode support */
+.dark {
+  color-scheme: dark;
+}
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+/* High contrast mode */
+.high-contrast * {
+  border-width: 2px !important;
+}
+.high-contrast p, .high-contrast span, .high-contrast td, .high-contrast th {
+  color: #000 !important;
+}
+.high-contrast .dark p, .high-contrast .dark span, .high-contrast .dark td, .high-contrast .dark th {
+  color: #fff !important;
+}

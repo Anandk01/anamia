@@ -56,6 +56,19 @@ export default function ProfileSettings() {
         setReducedMotion(d.accessibility?.reduced_motion || false);
       })
       .catch(() => {});
+
+    // Apply saved accessibility settings on mount
+    const savedFont = localStorage.getItem('anemia-font-size');
+    if (savedFont) {
+      setFontSize(savedFont);
+      const html = document.documentElement;
+      html.classList.remove('text-sm', 'text-base', 'text-lg');
+      html.classList.add(savedFont === 'S' ? 'text-sm' : savedFont === 'L' ? 'text-lg' : 'text-base');
+    }
+    if (localStorage.getItem('anemia-high-contrast') === '1') {
+      setHighContrast(true);
+      document.documentElement.classList.add('high-contrast');
+    }
   }, []);
 
   function toggleCondition(c) {
@@ -226,7 +239,13 @@ export default function ProfileSettings() {
             <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">Font Size</label>
             <div className="flex gap-2">
               {['S', 'M', 'L'].map(s => (
-                <button key={s} onClick={() => setFontSize(s)} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${fontSize === s ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                <button key={s} onClick={() => {
+                  setFontSize(s);
+                  const html = document.documentElement;
+                  html.classList.remove('text-sm', 'text-base', 'text-lg');
+                  html.classList.add(s === 'S' ? 'text-sm' : s === 'M' ? 'text-base' : 'text-lg');
+                  localStorage.setItem('anemia-font-size', s);
+                }} className={`px-4 py-2 rounded-lg text-sm font-medium transition ${fontSize === s ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-600'}`}>
                   {s === 'S' ? 'Small' : s === 'M' ? 'Medium' : 'Large'}
                 </button>
               ))}
@@ -234,7 +253,13 @@ export default function ProfileSettings() {
           </div>
           <div className="flex items-center justify-between py-2">
             <span className="text-sm text-slate-700">High Contrast</span>
-            <button onClick={() => setHighContrast(!highContrast)} className={`w-10 h-5 rounded-full transition ${highContrast ? 'bg-indigo-500' : 'bg-slate-300'}`}>
+            <button onClick={() => {
+              const next = !highContrast;
+              setHighContrast(next);
+              const html = document.documentElement;
+              if (next) { html.classList.add('high-contrast'); } else { html.classList.remove('high-contrast'); }
+              localStorage.setItem('anemia-high-contrast', next ? '1' : '0');
+            }} className={`w-10 h-5 rounded-full transition ${highContrast ? 'bg-indigo-500' : 'bg-slate-300'}`}>
               <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${highContrast ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
           </div>

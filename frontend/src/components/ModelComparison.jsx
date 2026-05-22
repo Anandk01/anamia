@@ -38,7 +38,7 @@ export default function ModelComparison() {
   useEffect(() => {
     client.get('/api/retrain/metrics')
       .then(res => setMetrics(res.data?.models || []))
-      .catch(() => {});
+      .catch(() => setMetrics([]));
   }, []);
 
   // Find best value per metric

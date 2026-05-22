@@ -84,6 +84,12 @@ export default function PrescriptionView() {
                   ))}
                 </tbody>
               </table>
+              {rx.diet_plan && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-green-700 uppercase mb-1">Diet Plan</p>
+                  <p className="text-sm text-green-800 whitespace-pre-wrap">{rx.diet_plan}</p>
+                </div>
+              )}
               {rx.notes && <p className="text-xs text-slate-500 italic">{rx.notes}</p>}
               <button
                 onClick={() => downloadPdf(rx.id)}

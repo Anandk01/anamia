@@ -33,6 +33,7 @@ import PrescriptionView from '../components/PrescriptionView.jsx';
 import SymptomChecker from '../components/SymptomChecker.jsx';
 import ProfileSettings from '../components/ProfileSettings.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import StatusFooter from '../components/StatusFooter.jsx';
 
@@ -48,13 +49,13 @@ function StatPill({ label, value, color }) {
 
 function StatCard({ label, value, sub, icon: Icon, color }) {
   return (
-    <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 flex items-center gap-3">
+    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 shadow-md hover:scale-[1.02] transition-transform">
       <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
         <Icon size={18} style={{ color }} />
       </div>
       <div>
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-lg font-bold text-slate-800">{value ?? '—'}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="text-lg font-bold text-slate-800 dark:text-white">{value ?? '—'}</p>
         {sub && <p className="text-xs text-slate-400">{sub}</p>}
       </div>
     </div>
@@ -139,7 +140,7 @@ export default function PatientDashboard() {
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
       {/* Sidebar */}
-      <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
+      <div className="flex flex-col flex-shrink-0 rounded-r-xl" style={{ width: '220px', backgroundColor: '#0f1117' }}>
         <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
@@ -181,11 +182,12 @@ export default function PatientDashboard() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: '#f8f9fa' }}>
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
         {/* Header */}
-        <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+        <div className="h-12 bg-gradient-to-r from-indigo-500 to-purple-600 border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
           <Breadcrumb items={['Dashboard', activeLabel]} />
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <NotificationBell />
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: '#6366f1' }}>{initials}</div>
           </div>
@@ -221,13 +223,13 @@ export default function PatientDashboard() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
-                <button onClick={() => setView('test')} className="bg-indigo-500 text-white rounded-lg p-4 text-sm font-medium hover:bg-indigo-600 transition flex items-center gap-2">
+                <button onClick={() => setView('test')} className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-4 text-sm font-medium hover:scale-[1.02] transition-transform shadow-lg flex items-center gap-2">
                   <FlaskConical size={16} /> New Blood Test
                 </button>
-                <button onClick={() => setView('appointments')} className="bg-white border border-slate-200 rounded-lg p-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2">
+                <button onClick={() => setView('appointments')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
                   <Calendar size={16} /> Book Appointment
                 </button>
-                <button onClick={() => setView('education')} className="bg-white border border-slate-200 rounded-lg p-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2">
+                <button onClick={() => setView('education')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
                   <BookOpen size={16} /> Learn About Anemia
                 </button>
               </div>
@@ -265,7 +267,7 @@ export default function PatientDashboard() {
           )}
 
           {view === 'history' && <ReportHistory username={username} role="patient" />}
-          {view === 'progress' && <HbTrendChart username={username} />}
+          {view === 'progress' && <HbTrendChart username={username} source="doctor" />}
           {view === 'appointments' && (
             <>
               <AppointmentCalendar

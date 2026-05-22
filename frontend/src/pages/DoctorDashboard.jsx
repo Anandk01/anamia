@@ -20,7 +20,6 @@ import ReportHistory from '../components/ReportHistory.jsx';
 import HbTrendChart from '../components/HbTrendChart.jsx';
 import PDFDownloadButton from '../components/PDFDownloadButton.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
-import AppointmentCalendar from '../components/AppointmentCalendar.jsx';
 import DoctorSchedule from '../components/DoctorSchedule.jsx';
 import Forum from '../components/Forum.jsx';
 import PostDetail from '../components/PostDetail.jsx';
@@ -31,6 +30,7 @@ import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
 import DoctorAvailability from '../components/DoctorAvailability.jsx';
 import ProfileSettings from '../components/ProfileSettings.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import Breadcrumb from '../components/Breadcrumb.jsx';
 import StatusFooter from '../components/StatusFooter.jsx';
 
@@ -46,13 +46,13 @@ function StatPill({ label, value, color }) {
 
 function StatCard({ label, value, sub, icon: Icon, color }) {
   return (
-    <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 flex items-center gap-3">
+    <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3 shadow-md hover:scale-[1.02] transition-transform">
       <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
         <Icon size={18} style={{ color }} />
       </div>
       <div>
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-lg font-bold text-slate-800">{value ?? '—'}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="text-lg font-bold text-slate-800 dark:text-white">{value ?? '—'}</p>
         {sub && <p className="text-xs text-slate-400">{sub}</p>}
       </div>
     </div>
@@ -94,7 +94,7 @@ export default function DoctorDashboard() {
     { id: 'home', label: 'Home', Icon: Home },
     { id: 'assessment', label: 'New Assessment', Icon: FlaskConical },
     { id: 'records', label: 'Patient Records', Icon: Users },
-    { id: 'schedule', label: 'Schedule', Icon: Calendar, badge: badges.appointments, badgeColor: '#3b82f6' },
+    { id: 'schedule', label: 'Appointments', Icon: Calendar, badge: badges.appointments, badgeColor: '#3b82f6' },
     { id: 'prescribe', label: 'Prescribe', Icon: FileText },
     { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: badges.messages },
     { id: 'forum', label: 'Forum', Icon: MessageSquare },
@@ -135,7 +135,7 @@ export default function DoctorDashboard() {
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
       {/* Sidebar */}
-      <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
+      <div className="flex flex-col flex-shrink-0 rounded-r-xl" style={{ width: '220px', backgroundColor: '#0f1117' }}>
         <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
@@ -177,11 +177,12 @@ export default function DoctorDashboard() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: '#f8f9fa' }}>
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
         {/* Header */}
-        <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+        <div className="h-12 bg-gradient-to-r from-indigo-500 to-purple-600 border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
           <Breadcrumb items={['Dashboard', activeLabel]} />
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <NotificationBell />
             {badges.appointments > 0 && (
               <span className="text-xs bg-amber-100 text-amber-700 font-medium px-2 py-0.5 rounded-full">{badges.appointments} pending</span>
@@ -235,16 +236,16 @@ export default function DoctorDashboard() {
 
               {/* Quick Actions */}
               <div className="grid grid-cols-4 gap-3">
-                <button onClick={() => setView('assessment')} className="bg-indigo-500 text-white rounded-lg p-3 text-xs font-medium hover:bg-indigo-600 transition flex items-center gap-2">
+                <button onClick={() => setView('assessment')} className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-3 text-xs font-medium hover:scale-[1.02] transition-transform shadow-lg flex items-center gap-2">
                   <FlaskConical size={14} /> New Assessment
                 </button>
-                <button onClick={() => setView('prescribe')} className="bg-white border border-slate-200 rounded-lg p-3 text-xs font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2">
+                <button onClick={() => setView('prescribe')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
                   <FileText size={14} /> Prescribe
                 </button>
-                <button onClick={() => setView('schedule')} className="bg-white border border-slate-200 rounded-lg p-3 text-xs font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2">
-                  <Calendar size={14} /> Schedule
+                <button onClick={() => setView('schedule')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
+                  <Calendar size={14} /> Appointments
                 </button>
-                <button onClick={() => setView('records')} className="bg-white border border-slate-200 rounded-lg p-3 text-xs font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2">
+                <button onClick={() => setView('records')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
                   <Users size={14} /> Records
                 </button>
               </div>
@@ -286,7 +287,7 @@ export default function DoctorDashboard() {
           )}
 
           {view === 'records' && <ReportHistory username={username} role="doctor" />}
-          {view === 'schedule' && <AppointmentCalendar />}
+          {view === 'schedule' && <DoctorSchedule />}
           {view === 'prescribe' && <PrescriptionForm />}
           {view === 'messages' && (
             <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-2">

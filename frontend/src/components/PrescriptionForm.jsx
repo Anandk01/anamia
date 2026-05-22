@@ -11,6 +11,7 @@ export default function PrescriptionForm() {
   const [durationDays, setDurationDays] = useState('');
   const [followUpDate, setFollowUpDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [dietPlan, setDietPlan] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
@@ -41,6 +42,7 @@ export default function PrescriptionForm() {
         duration_days: parseInt(durationDays) || null,
         follow_up_date: followUpDate || null,
         notes,
+        diet_plan: dietPlan,
       });
       setSuccess(true);
       setPatientUsername('');
@@ -49,6 +51,7 @@ export default function PrescriptionForm() {
       setDurationDays('');
       setFollowUpDate('');
       setNotes('');
+      setDietPlan('');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create prescription');
     } finally {
@@ -156,6 +159,18 @@ export default function PrescriptionForm() {
               className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
+        </div>
+
+        {/* Diet Plan */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Diet Plan</label>
+          <textarea
+            value={dietPlan}
+            onChange={e => setDietPlan(e.target.value)}
+            rows={3}
+            placeholder="Recommended diet, foods to eat/avoid..."
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
 
         {/* Notes */}
