@@ -19,6 +19,7 @@ from flask import Blueprint, g, jsonify, request
 from db import get_db, log_access_violation
 from middleware.auth import require_auth
 from middleware.rbac import require_role
+from services.audit_service import log_action
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api")
 
@@ -365,6 +366,15 @@ def create_user():
         action="admin_create_user",
     )
 
+    # --- Audit service log ---
+    log_action(
+        actor=current_user.get("username", "anonymous"),
+        action="user_create",
+        target=username,
+        details={"role": role},
+        ip=request.remote_addr,
+    )
+
     created = {
         "user_id": row["user_id"],
         "username": row["username"],
@@ -458,6 +468,14 @@ def deactivate_user(user_id: int):
         role_claim=current_user.get("role", ""),
         ip_address=request.remote_addr,
         action="admin_deactivate_user",
+    )
+
+    # --- Audit service log ---
+    log_action(
+        actor=current_user.get("username", "anonymous"),
+        action="user_deactivate",
+        target=str(user_id),
+        ip=request.remote_addr,
     )
 
     return jsonify(

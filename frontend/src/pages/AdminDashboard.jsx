@@ -1,29 +1,46 @@
 /**
  * AdminDashboard.jsx
- * Sidebar nav: Overview, Users, Alert Log, Retraining.
- * Header bar with DB/RF/GB health status indicators.
+ * Full-featured admin dashboard with 12 nav items, system health indicators, and rich overview.
  */
 
 import { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Users, Bell, RefreshCw, LogOut,
-  Plus, X, CheckCircle, XCircle, Loader2,
+  LayoutDashboard, Users, Brain, BarChart3, GitCompare, RefreshCw,
+  Bell, FileText, MessageSquare, BookOpen, Activity, Settings,
+  LogOut, Plus, X, CheckCircle, XCircle, Loader2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AreaChart, Area, PieChart, Pie, Cell,
+  AreaChart, Area, PieChart, Pie, Cell, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { useAuth } from '../hooks/useAuth.js';
 import client from '../api/client.js';
+
 import AlertLog from '../components/AlertLog.jsx';
 import RetrainingPanel from '../components/RetrainingPanel.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
+import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
+import ModelComparison from '../components/ModelComparison.jsx';
+import Forum from '../components/Forum.jsx';
+import ArticleEditor from '../components/ArticleEditor.jsx';
+import ProfileSettings from '../components/ProfileSettings.jsx';
+import NotificationBell from '../components/NotificationBell.jsx';
+import Breadcrumb from '../components/Breadcrumb.jsx';
+import StatusFooter from '../components/StatusFooter.jsx';
 
-// ─── Stat card ────────────────────────────────────────────────────────────────
+function HealthDot({ label, ok }) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs">
+      {ok === null ? <Loader2 size={10} className="animate-spin text-slate-400" /> : ok ? <CheckCircle size={10} className="text-emerald-500" /> : <XCircle size={10} className="text-red-500" />}
+      <span className="text-slate-600">{label}</span>
+    </div>
+  );
+}
+
 function StatCard({ label, value, sub, color }) {
   return (
-    <div className="bg-white rounded border border-slate-200 px-4 py-3">
+    <div className="bg-white rounded-lg border border-slate-200 px-4 py-3">
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</p>
       <p className="text-2xl font-bold" style={{ color: color || '#1e293b' }}>{value ?? '—'}</p>
       {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
@@ -31,25 +48,8 @@ function StatCard({ label, value, sub, color }) {
   );
 }
 
-// ─── Health indicator ─────────────────────────────────────────────────────────
-function HealthDot({ label, ok }) {
-  return (
-    <div className="flex items-center gap-1.5 text-xs">
-      {ok === null ? (
-        <Loader2 size={10} className="animate-spin text-slate-400" />
-      ) : ok ? (
-        <CheckCircle size={10} className="text-emerald-500" />
-      ) : (
-        <XCircle size={10} className="text-red-500" />
-      )}
-      <span className="text-slate-600">{label}</span>
-    </div>
-  );
-}
-
-const SEVERITY_COLORS = {
-  None: '#10b981', Mild: '#f59e0b', Moderate: '#f97316', Severe: '#ef4444',
-};
+const SEVERITY_COLORS = { None: '#10b981', Mild: '#f59e0b', Moderate: '#f97316', Severe: '#ef4444' };
+const PIE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
   const username = user?.username || 'admin';
 
   const [view, setView] = useState('overview');
-  const [health, setHealth] = useState({ db: null, rf: null, gb: null });
+  const [health, setHealth] = useState({ db: null, rf: null, gb: null, ws: null, queue: null });
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [userSearch, setUserSearch] = useState('');
@@ -66,34 +66,47 @@ export default function AdminDashboard() {
   const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'patient' });
   const [createError, setCreateError] = useState(null);
   const [createLoading, setCreateLoading] = useState(false);
+  const [badges, setBadges] = useState({});
+  const [auditLog, setAuditLog] = useState([]);
 
-  // Fetch health status
   useEffect(() => {
-    client.get('/health')
-      .then((res) => {
-        const d = res.data;
-        setHealth({
-          db: d.db === true,
-          rf: d.models?.rf_classifier === true,
-          gb: d.models?.gb_severity === true,
-        });
-      })
-      .catch(() => setHealth({ db: false, rf: false, gb: false }));
+    client.get('/health').then(res => {
+      const d = res.data;
+      setHealth({ db: d.db === true, rf: d.models?.rf_classifier === true, gb: d.models?.gb_severity === true, ws: true, queue: true });
+    }).catch(() => setHealth({ db: false, rf: false, gb: false, ws: false, queue: false }));
   }, []);
 
-  // Fetch stats
   useEffect(() => {
     if (view === 'overview') {
-      client.get('/api/stats').then((res) => setStats(res.data)).catch(() => {});
+      client.get('/api/stats').then(res => setStats(res.data)).catch(() => {});
+      client.get('/api/audit-log', { params: { limit: 5 } }).then(res => setAuditLog(res.data?.logs || [])).catch(() => {});
     }
   }, [view]);
 
-  // Fetch users
   useEffect(() => {
     if (view === 'users') {
-      client.get('/api/users').then((res) => setUsers(res.data?.users || [])).catch(() => {});
+      client.get('/api/users').then(res => setUsers(res.data?.users || [])).catch(() => {});
     }
   }, [view]);
+
+  useEffect(() => {
+    client.get('/api/notifications/unread-count').then(r => setBadges(b => ({ ...b, alerts: r.data?.count || 0 }))).catch(() => {});
+  }, []);
+
+  const NAV_ITEMS = [
+    { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
+    { id: 'users', label: 'Users', Icon: Users },
+    { id: 'predictions', label: 'Predictions', Icon: Brain },
+    { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
+    { id: 'comparison', label: 'Model Comparison', Icon: GitCompare },
+    { id: 'retraining', label: 'Retraining', Icon: RefreshCw },
+    { id: 'alertlog', label: 'Alert Log', Icon: Bell, badge: badges.alerts, badgeColor: '#ef4444' },
+    { id: 'auditlog', label: 'Audit Log', Icon: FileText },
+    { id: 'forum', label: 'Forum Moderation', Icon: MessageSquare },
+    { id: 'articles', label: 'Articles', Icon: BookOpen },
+    { id: 'health', label: 'System Health', Icon: Activity },
+    { id: 'settings', label: 'Settings', Icon: Settings },
+  ];
 
   async function handleLogout() {
     await logout();
@@ -103,134 +116,109 @@ export default function AdminDashboard() {
   async function handleDeactivate(userId) {
     try {
       await client.patch(`/api/users/${userId}/deactivate`);
-      setUsers((prev) => prev.map((u) => u.user_id === userId ? { ...u, status: 'inactive' } : u));
-    } catch {
-      // silently fail
-    }
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, status: 'inactive' } : u));
+    } catch {}
   }
 
   async function handleCreateUser(e) {
     e.preventDefault();
-    setCreateLoading(true);
-    setCreateError(null);
+    setCreateLoading(true); setCreateError(null);
     try {
       const res = await client.post('/api/users', newUser);
-      setUsers((prev) => [...prev, res.data?.user || newUser]);
+      setUsers(prev => [...prev, res.data?.user || newUser]);
       setShowCreatePanel(false);
       setNewUser({ username: '', email: '', password: '', role: 'patient' });
-    } catch (err) {
-      setCreateError(err.response?.data?.message || 'Failed to create user.');
-    } finally {
-      setCreateLoading(false);
-    }
+    } catch (err) { setCreateError(err.response?.data?.message || 'Failed to create user.'); }
+    finally { setCreateLoading(false); }
   }
 
-  const filteredUsers = users.filter((u) =>
-    u.username?.toLowerCase().includes(userSearch.toLowerCase()) ||
-    u.email?.toLowerCase().includes(userSearch.toLowerCase())
-  );
-
+  const filteredUsers = users.filter(u => u.username?.toLowerCase().includes(userSearch.toLowerCase()) || u.email?.toLowerCase().includes(userSearch.toLowerCase()));
   const initials = username.slice(0, 2).toUpperCase();
+  const activeLabel = NAV_ITEMS.find(n => n.id === view)?.label || 'Overview';
 
-  const NAV_ITEMS = [
-    { id: 'overview',    label: 'Overview',   Icon: LayoutDashboard },
-    { id: 'users',       label: 'Users',      Icon: Users },
-    { id: 'alertlog',    label: 'Alert Log',  Icon: Bell },
-    { id: 'retraining',  label: 'Retraining', Icon: RefreshCw },
-  ];
-
-  // Chart data from stats
   const areaData = stats?.daily_predictions || [];
-  const severityPieData = stats?.severity_distribution
-    ? Object.entries(stats.severity_distribution).map(([name, value]) => ({ name, value }))
-    : [];
-  const typePieData = stats?.type_distribution
-    ? Object.entries(stats.type_distribution).map(([name, value]) => ({ name, value }))
-    : [];
-
-  const PIE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  const severityPieData = stats?.severity_distribution ? Object.entries(stats.severity_distribution).map(([name, value]) => ({ name, value })) : [];
+  const typePieData = stats?.type_distribution ? Object.entries(stats.type_distribution).map(([name, value]) => ({ name, value })) : [];
 
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
       {/* Sidebar */}
       <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
-        <div className="px-5 py-5 border-b border-slate-800">
+        <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
-            <span className="text-white font-semibold text-sm tracking-tight">AnemiaDetect</span>
+            <span className="text-white font-semibold text-sm tracking-tight">AnemiaCare</span>
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_ITEMS.map(({ id, label, Icon }) => (
+        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+          {NAV_ITEMS.map(({ id, label, Icon, badge, badgeColor }) => (
             <button
               key={id}
               onClick={() => setView(id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-all border-l-2 ${
-                view === id
-                  ? 'text-white border-indigo-500'
-                  : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800'
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-all ${
+                view === id ? 'text-white bg-indigo-500/15 border-l-2 border-indigo-500' : 'text-slate-400 border-l-2 border-transparent hover:text-slate-200 hover:bg-slate-800'
               }`}
-              style={view === id ? { backgroundColor: 'rgba(99,102,241,0.15)' } : {}}
             >
               <Icon size={15} />
-              {label}
+              <span className="flex-1 text-left truncate">{label}</span>
+              {badge > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white min-w-[18px] text-center" style={{ backgroundColor: badgeColor || '#ef4444' }}>
+                  {badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-slate-800 space-y-3">
+        <div className="px-3 py-3 border-t border-slate-800 space-y-2">
           <LanguageSelector />
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: '#6366f1' }}>
-              {initials}
-            </div>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: '#6366f1' }}>{initials}</div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-medium truncate">{username}</p>
-              <p className="text-slate-500 text-xs">Admin</p>
+              <p className="text-slate-500 text-[10px]">Admin</p>
             </div>
-            <button onClick={handleLogout} className="text-slate-500 hover:text-slate-300 transition" title="Logout">
-              <LogOut size={14} />
-            </button>
+            <button onClick={handleLogout} className="text-slate-500 hover:text-slate-300" title="Logout"><LogOut size={14} /></button>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: '#f8f9fa' }}>
-        {/* Header bar with health indicators */}
-        <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0">
-          <h2 className="text-sm font-semibold text-slate-700">
-            {view === 'overview' && 'Overview'}
-            {view === 'users' && 'User Management'}
-            {view === 'alertlog' && 'Alert Log'}
-            {view === 'retraining' && 'Model Retraining'}
-          </h2>
+        {/* Header */}
+        <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+          <Breadcrumb items={['Admin', activeLabel]} />
           <div className="flex items-center gap-4">
             <HealthDot label="DB" ok={health.db} />
-            <HealthDot label="RF" ok={health.rf} />
-            <HealthDot label="GB" ok={health.gb} />
+            <HealthDot label="Models" ok={health.rf && health.gb} />
+            <HealthDot label="WebSocket" ok={health.ws} />
+            <HealthDot label="Queue" ok={health.queue} />
+            <NotificationBell />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        {/* Content */}
+        <div id="main-content" className="flex-1 overflow-y-auto p-5">
           {/* Overview */}
           {view === 'overview' && (
             <div className="space-y-5">
-              {/* Stat cards */}
-              <div className="grid grid-cols-3 gap-4">
+              {/* 8 stat cards in 2 rows */}
+              <div className="grid grid-cols-4 gap-4">
                 <StatCard label="Total Predictions" value={stats?.total_predictions} />
                 <StatCard label="Total Users" value={stats?.total_users} />
                 <StatCard label="Anemia Cases" value={stats?.anemia_cases} color="#ef4444" />
                 <StatCard label="Severe Cases" value={stats?.severe_cases} color="#ef4444" sub="HGB < 8.0" />
                 <StatCard label="Alerts Sent" value={stats?.alerts_sent} />
                 <StatCard label="Retraining Runs" value={stats?.retrain_count} />
+                <StatCard label="Active Doctors" value={stats?.active_doctors || '—'} color="#6366f1" />
+                <StatCard label="Avg Adherence" value={stats?.avg_adherence ? `${stats.avg_adherence}%` : '—'} color="#10b981" />
               </div>
 
-              {/* Area chart */}
+              {/* Full-width area chart */}
               {areaData.length > 0 && (
-                <div className="bg-white rounded border border-slate-200 p-4">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Daily Predictions</p>
+                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Daily Predictions (30 days)</p>
                   <ResponsiveContainer width="100%" height={200}>
                     <AreaChart data={areaData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -243,17 +231,15 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* Pie charts */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* 3-column chart row */}
+              <div className="grid grid-cols-3 gap-4">
                 {severityPieData.length > 0 && (
-                  <div className="bg-white rounded border border-slate-200 p-4">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Severity Distribution</p>
-                    <ResponsiveContainer width="100%" height={180}>
+                  <div className="bg-white rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Severity</p>
+                    <ResponsiveContainer width="100%" height={160}>
                       <PieChart>
-                        <Pie data={severityPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                          {severityPieData.map((entry, idx) => (
-                            <Cell key={idx} fill={SEVERITY_COLORS[entry.name] || PIE_COLORS[idx % PIE_COLORS.length]} />
-                          ))}
+                        <Pie data={severityPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={55} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={9}>
+                          {severityPieData.map((entry, idx) => <Cell key={idx} fill={SEVERITY_COLORS[entry.name] || PIE_COLORS[idx % PIE_COLORS.length]} />)}
                         </Pie>
                         <Tooltip />
                       </PieChart>
@@ -261,21 +247,59 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 {typePieData.length > 0 && (
-                  <div className="bg-white rounded border border-slate-200 p-4">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Anemia Type Distribution</p>
-                    <ResponsiveContainer width="100%" height={180}>
+                  <div className="bg-white rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Anemia Types</p>
+                    <ResponsiveContainer width="100%" height={160}>
                       <PieChart>
-                        <Pie data={typePieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                          {typePieData.map((entry, idx) => (
-                            <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                          ))}
+                        <Pie data={typePieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={55} label={({ percent }) => `${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={9}>
+                          {typePieData.map((_, idx) => <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />)}
                         </Pie>
                         <Tooltip />
-                        <Legend iconSize={8} wrapperStyle={{ fontSize: '10px' }} />
+                        <Legend iconSize={8} wrapperStyle={{ fontSize: '9px' }} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
                 )}
+                {areaData.length > 0 && (
+                  <div className="bg-white rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Weekly Volume</p>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={areaData.slice(-7)}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} />
+                        <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} />
+                        <Tooltip />
+                        <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Audit Log */}
+              <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Recent Audit Log</p>
+                {auditLog.length === 0 && <p className="text-sm text-slate-400">No recent activity</p>}
+                <div className="space-y-2">
+                  {auditLog.map((log, idx) => (
+                    <div key={idx} className="flex items-center gap-3 text-sm py-1.5 border-b border-slate-50 last:border-0">
+                      <span className="text-xs text-slate-400 w-32 flex-shrink-0">{log.timestamp || log.created_at}</span>
+                      <span className="text-slate-700 font-medium">{log.action}</span>
+                      <span className="text-slate-500 text-xs">{log.username || log.user}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* System Health */}
+              <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase mb-3">System Health</p>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="flex items-center gap-2"><HealthDot label="Database" ok={health.db} /></div>
+                  <div className="flex items-center gap-2"><HealthDot label="RF Model" ok={health.rf} /></div>
+                  <div className="flex items-center gap-2"><HealthDot label="GB Model" ok={health.gb} /></div>
+                  <div className="flex items-center gap-2"><HealthDot label="WebSocket" ok={health.ws} /></div>
+                </div>
               </div>
             </div>
           )}
@@ -284,26 +308,14 @@ export default function AdminDashboard() {
           {view === 'users' && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Search users..."
-                  className="flex-1 rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:border-transparent transition"
-                />
-                <button
-                  onClick={() => setShowCreatePanel(true)}
-                  className="flex items-center gap-1.5 text-white font-semibold px-3 py-2 rounded text-sm transition"
-                  style={{ backgroundColor: '#6366f1' }}
-                >
-                  <Plus size={14} />
-                  Create User
+                <input type="text" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search users..." className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <button onClick={() => setShowCreatePanel(true)} className="flex items-center gap-1.5 text-white font-semibold px-3 py-2 rounded-lg text-sm bg-indigo-500 hover:bg-indigo-600 transition">
+                  <Plus size={14} /> Create User
                 </button>
               </div>
-
-              <div className="bg-white rounded border border-slate-200 overflow-hidden">
+              <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase">
                     <tr>
                       <th className="px-3 py-2 text-left">Username</th>
                       <th className="px-3 py-2 text-left">Email</th>
@@ -313,81 +325,44 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {filteredUsers.map((u) => (
-                      <tr key={u.user_id} className="hover:bg-slate-50 transition" style={{ height: '36px' }}>
-                        <td className="px-3 py-1.5 font-medium text-slate-700">{u.username}</td>
-                        <td className="px-3 py-1.5 text-slate-500 text-xs">{u.email}</td>
-                        <td className="px-3 py-1.5">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">{u.role}</span>
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                            {u.status}
-                          </span>
-                        </td>
-                        <td className="px-3 py-1.5">
-                          {u.status === 'active' && (
-                            <button
-                              onClick={() => handleDeactivate(u.user_id)}
-                              className="text-xs text-red-600 hover:text-red-800 transition font-medium"
-                            >
-                              Deactivate
-                            </button>
-                          )}
-                        </td>
+                    {filteredUsers.map(u => (
+                      <tr key={u.user_id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-medium text-slate-700">{u.username}</td>
+                        <td className="px-3 py-2 text-slate-500 text-xs">{u.email}</td>
+                        <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">{u.role}</span></td>
+                        <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{u.status}</span></td>
+                        <td className="px-3 py-2">{u.status === 'active' && <button onClick={() => handleDeactivate(u.user_id)} className="text-xs text-red-600 hover:text-red-800 font-medium">Deactivate</button>}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* Create User slide-in panel */}
               {showCreatePanel && (
                 <>
                   <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowCreatePanel(false)} />
                   <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col">
                     <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                       <h3 className="font-semibold text-slate-800">Create User</h3>
-                      <button onClick={() => setShowCreatePanel(false)} className="text-slate-400 hover:text-slate-600 transition">
-                        <X size={18} />
-                      </button>
+                      <button onClick={() => setShowCreatePanel(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
                     </div>
                     <form onSubmit={handleCreateUser} className="flex-1 p-5 space-y-4">
-                      {[
-                        { name: 'username', label: 'Username', type: 'text' },
-                        { name: 'email', label: 'Email', type: 'email' },
-                        { name: 'password', label: 'Password', type: 'password' },
-                      ].map(({ name, label, type }) => (
+                      {[{ name: 'username', label: 'Username', type: 'text' }, { name: 'email', label: 'Email', type: 'email' }, { name: 'password', label: 'Password', type: 'password' }].map(({ name, label, type }) => (
                         <div key={name}>
-                          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{label}</label>
-                          <input
-                            type={type}
-                            value={newUser[name]}
-                            onChange={(e) => setNewUser((p) => ({ ...p, [name]: e.target.value }))}
-                            required
-                            className="w-full rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:border-transparent transition"
-                          />
+                          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">{label}</label>
+                          <input type={type} value={newUser[name]} onChange={e => setNewUser(p => ({ ...p, [name]: e.target.value }))} required className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         </div>
                       ))}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Role</label>
-                        <select
-                          value={newUser.role}
-                          onChange={(e) => setNewUser((p) => ({ ...p, role: e.target.value }))}
-                          className="w-full rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:border-transparent transition"
-                        >
+                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Role</label>
+                        <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                           <option value="patient">Patient</option>
                           <option value="doctor">Doctor</option>
                           <option value="admin">Admin</option>
                         </select>
                       </div>
                       {createError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{createError}</div>}
-                      <button
-                        type="submit"
-                        disabled={createLoading}
-                        className="w-full text-white font-semibold py-2 rounded text-sm transition disabled:opacity-60"
-                        style={{ backgroundColor: '#6366f1' }}
-                      >
+                      <button type="submit" disabled={createLoading} className="w-full bg-indigo-500 text-white font-semibold py-2 rounded-lg text-sm hover:bg-indigo-600 disabled:opacity-60">
                         {createLoading ? 'Creating...' : 'Create User'}
                       </button>
                     </form>
@@ -397,12 +372,72 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Alert Log */}
-          {view === 'alertlog' && <AlertLog />}
+          {view === 'predictions' && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-slate-800">All Predictions</h2>
+              <div className="bg-white rounded-lg border border-slate-200 p-4">
+                {areaData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={areaData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="count" stroke="#6366f1" fill="#e0e7ff" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : <p className="text-sm text-slate-400">No prediction data</p>}
+              </div>
+            </div>
+          )}
 
-          {/* Retraining */}
+          {view === 'analytics' && <AnalyticsDashboard />}
+          {view === 'comparison' && <ModelComparison />}
           {view === 'retraining' && <RetrainingPanel />}
+          {view === 'alertlog' && <AlertLog />}
+          {view === 'auditlog' && (
+            <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Audit Log</p>
+              {auditLog.length === 0 && <p className="text-sm text-slate-400">No audit entries</p>}
+              <div className="space-y-2">
+                {auditLog.map((log, idx) => (
+                  <div key={idx} className="flex items-center gap-3 text-sm py-2 border-b border-slate-50 last:border-0">
+                    <span className="text-xs text-slate-400 w-36 flex-shrink-0">{log.timestamp || log.created_at}</span>
+                    <span className="text-slate-700 font-medium">{log.action}</span>
+                    <span className="text-slate-500 text-xs flex-1">{log.details || ''}</span>
+                    <span className="text-xs text-slate-400">{log.username || log.user}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {view === 'forum' && <Forum />}
+          {view === 'articles' && <ArticleEditor />}
+          {view === 'health' && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-slate-800">System Health</h2>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: 'Database', ok: health.db, desc: 'SQLite connection' },
+                  { label: 'RF Classifier', ok: health.rf, desc: 'Random Forest model loaded' },
+                  { label: 'GB Severity', ok: health.gb, desc: 'Gradient Boosting model loaded' },
+                  { label: 'WebSocket', ok: health.ws, desc: 'Real-time connections' },
+                ].map(item => (
+                  <div key={item.label} className="bg-white rounded-lg border border-slate-200 p-4 flex items-center gap-3">
+                    {item.ok ? <CheckCircle size={20} className="text-emerald-500" /> : <XCircle size={20} className="text-red-500" />}
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">{item.label}</p>
+                      <p className="text-xs text-slate-400">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {view === 'settings' && <ProfileSettings />}
         </div>
+
+        <StatusFooter />
       </div>
     </div>
   );
