@@ -30,6 +30,7 @@ from sklearn.preprocessing import StandardScaler
 from db import get_db
 from middleware.auth import require_auth
 from middleware.rbac import require_role
+from services.audit_service import log_action
 
 logger = logging.getLogger(__name__)
 
@@ -366,6 +367,14 @@ def start_retrain():
     )
     thread.start()
 
+    # --- Audit service log: retrain start ---
+    log_action(
+        actor=admin_username,
+        action="retrain_start",
+        details={"retrain_id": retrain_id},
+        ip=request.remote_addr,
+    )
+
     return jsonify({
         "status": "ok",
         "message": "Retraining started",
@@ -520,6 +529,13 @@ def approve_retrain():
     except Exception as exc:
         logger.warning("Failed to reload PredictionService: %s", exc)
 
+    # --- Audit service log: retrain approve ---
+    log_action(
+        actor=g.current_user["username"],
+        action="retrain_approve",
+        ip=request.remote_addr,
+    )
+
     return jsonify({
         "status": "ok",
         "message": "New models approved and deployed. PredictionService reloaded.",
@@ -567,6 +583,13 @@ def rollback_retrain():
         logger.info("PredictionService reloaded after rollback.")
     except Exception as exc:
         logger.warning("Failed to reload PredictionService after rollback: %s", exc)
+
+    # --- Audit service log: retrain rollback ---
+    log_action(
+        actor=g.current_user["username"],
+        action="retrain_rollback",
+        ip=request.remote_addr,
+    )
 
     return jsonify({
         "status": "ok",

@@ -1,15 +1,18 @@
 /**
  * PatientDashboard.jsx
- * Fixed layout: 220px dark sidebar + content area.
- * Views: New Test, History, Progress, Chat.
+ * Full-featured patient dashboard with 13 nav items, stat pills, and rich home view.
  */
 
-import { useState } from 'react';
-import { FlaskConical, Table2, TrendingUp, MessageCircle, LogOut } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  Home, FlaskConical, Table2, TrendingUp, Calendar, Pill, MessageCircle,
+  MessageSquare, BookOpen, FileText, Utensils, Stethoscope, Settings, LogOut,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth.js';
 import client from '../api/client.js';
+
 import CBCForm from '../components/CBCForm.jsx';
 import PredictionResult from '../components/PredictionResult.jsx';
 import DietRecommendations from '../components/DietRecommendations.jsx';
@@ -19,15 +22,41 @@ import HbTrendChart from '../components/HbTrendChart.jsx';
 import PDFDownloadButton from '../components/PDFDownloadButton.jsx';
 import Chatbot from '../components/Chatbot.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
+import AppointmentCalendar from '../components/AppointmentCalendar.jsx';
+import BookingModal from '../components/BookingModal.jsx';
+import MedicationTracker from '../components/MedicationTracker.jsx';
+import Forum from '../components/Forum.jsx';
+import PostDetail from '../components/PostDetail.jsx';
+import CreatePost from '../components/CreatePost.jsx';
+import EducationCenter from '../components/EducationCenter.jsx';
+import PrescriptionView from '../components/PrescriptionView.jsx';
+import SymptomChecker from '../components/SymptomChecker.jsx';
+import ProfileSettings from '../components/ProfileSettings.jsx';
+import NotificationBell from '../components/NotificationBell.jsx';
+import Breadcrumb from '../components/Breadcrumb.jsx';
+import StatusFooter from '../components/StatusFooter.jsx';
 
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
-function Skeleton() {
+function StatPill({ label, value, color }) {
   return (
-    <div className="space-y-3 animate-pulse">
-      <div className="h-16 bg-slate-200 rounded" />
-      <div className="h-8 bg-slate-200 rounded w-3/4" />
-      <div className="h-8 bg-slate-200 rounded w-1/2" />
-      <div className="h-32 bg-slate-200 rounded" />
+    <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-1.5">
+      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-xs font-bold text-slate-700">{value ?? '—'}</span>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, icon: Icon, color }) {
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 flex items-center gap-3">
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
+        <Icon size={18} style={{ color }} />
+      </div>
+      <div>
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-lg font-bold text-slate-800">{value ?? '—'}</p>
+        {sub && <p className="text-xs text-slate-400">{sub}</p>}
+      </div>
     </div>
   );
 }
@@ -39,30 +68,64 @@ export default function PatientDashboard() {
   const user = getUser();
   const username = user?.username || 'patient';
 
-  const [view, setView] = useState('test');
+  const [view, setView] = useState('home');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [veganOnly, setVeganOnly] = useState(user?.vegan_diet === 1);
+  const [badges, setBadges] = useState({});
+  const [quickStats, setQuickStats] = useState({});
+
+  // Booking modal state
+  const [showBooking, setShowBooking] = useState(false);
+  const [bookingSlot, setBookingSlot] = useState(null);
+  const [doctors, setDoctors] = useState([]);
+
+  // Forum state
+  const [forumView, setForumView] = useState('list');
+  const [selectedPost, setSelectedPost] = useState(null);
+
+  useEffect(() => {
+    // Fetch badge counts
+    client.get('/api/notifications/unread-count').then(r => setBadges(b => ({ ...b, messages: r.data?.count || 0 }))).catch(() => {});
+    client.get('/api/appointments/pending-count').then(r => setBadges(b => ({ ...b, appointments: r.data?.count || 0 }))).catch(() => {});
+    client.get('/api/medications/due-today').then(r => setBadges(b => ({ ...b, medications: r.data?.count || 0 }))).catch(() => {});
+    // Quick stats
+    client.get('/api/profile/quick-stats').then(r => setQuickStats(r.data || {})).catch(() => {});
+    // Fetch doctors for booking modal
+    client.get('/api/appointments/doctors').then(r => {
+      const list = r.data?.doctors || [];
+      setDoctors(list.map(d => ({ id: d.id, name: d.name || d.username, specialization: d.specialization })));
+    }).catch(() => {
+      // Fallback: try the admin endpoint (won't work for patients but handles edge cases)
+      setDoctors([]);
+    });
+  }, []);
 
   const NAV_ITEMS = [
-    { id: 'test',     label: t('new_test'),  Icon: FlaskConical },
-    { id: 'history',  label: t('history'),   Icon: Table2 },
-    { id: 'progress', label: t('progress'),  Icon: TrendingUp },
-    { id: 'chat',     label: t('chat'),      Icon: MessageCircle },
+    { id: 'home', label: 'Home', Icon: Home },
+    { id: 'test', label: 'New Test', Icon: FlaskConical },
+    { id: 'history', label: 'History', Icon: Table2 },
+    { id: 'progress', label: 'Progress', Icon: TrendingUp },
+    { id: 'appointments', label: 'Appointments', Icon: Calendar, badge: badges.appointments },
+    { id: 'medications', label: 'Medications', Icon: Pill, badge: badges.medications, badgeColor: '#f59e0b' },
+    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: badges.messages },
+    { id: 'forum', label: 'Forum', Icon: MessageSquare },
+    { id: 'education', label: 'Education', Icon: BookOpen },
+    { id: 'prescriptions', label: 'Prescriptions', Icon: FileText },
+    { id: 'diet', label: 'Diet Plan', Icon: Utensils },
+    { id: 'symptom', label: 'Symptom Checker', Icon: Stethoscope },
+    { id: 'settings', label: 'Settings', Icon: Settings },
   ];
+
   async function handleCBCSubmit(cbcData) {
-    setLoading(true);
-    setError(null);
-    setResult(null);
+    setLoading(true); setError(null); setResult(null);
     try {
       const res = await client.post('/api/predict', { username, ...cbcData });
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Prediction failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+      setError(err.response?.data?.message || 'Prediction failed.');
+    } finally { setLoading(false); }
   }
 
   async function handleLogout() {
@@ -70,153 +133,190 @@ export default function PatientDashboard() {
     navigate('/login', { replace: true });
   }
 
-  // Initials avatar
   const initials = username.slice(0, 2).toUpperCase();
+  const activeLabel = NAV_ITEMS.find(n => n.id === view)?.label || 'Dashboard';
 
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
-      {/* ── Sidebar ── */}
-      <div
-        className="flex flex-col flex-shrink-0"
-        style={{ width: '220px', backgroundColor: '#0f1117' }}
-      >
-        {/* Logo */}
-        <div className="px-5 py-5 border-b border-slate-800">
+      {/* Sidebar */}
+      <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
+        <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
-            <span className="text-white font-semibold text-sm tracking-tight">AnemiaDetect</span>
+            <span className="text-white font-semibold text-sm tracking-tight">AnemiaCare</span>
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_ITEMS.map(({ id, label, Icon }) => (
+        <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+          {NAV_ITEMS.map(({ id, label, Icon, badge, badgeColor }) => (
             <button
               key={id}
-              onClick={() => setView(id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-all border-l-2 ${
-                view === id
-                  ? 'text-white border-indigo-500'
-                  : 'text-slate-400 border-transparent hover:text-slate-200 hover:bg-slate-800'
+              onClick={() => { setView(id); if (id !== 'forum') { setForumView('list'); setSelectedPost(null); } }}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-all ${
+                view === id ? 'text-white bg-indigo-500/15 border-l-2 border-indigo-500' : 'text-slate-400 border-l-2 border-transparent hover:text-slate-200 hover:bg-slate-800'
               }`}
-              style={view === id ? { backgroundColor: 'rgba(99,102,241,0.15)' } : {}}
             >
               <Icon size={15} />
-              {label}
+              <span className="flex-1 text-left truncate">{label}</span>
+              {badge > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white min-w-[18px] text-center" style={{ backgroundColor: badgeColor || '#ef4444' }}>
+                  {badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="px-3 py-4 border-t border-slate-800 space-y-3">
+        <div className="px-3 py-3 border-t border-slate-800 space-y-2">
           <LanguageSelector />
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: '#6366f1' }}>
-              {initials}
-            </div>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: '#6366f1' }}>{initials}</div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-medium truncate">{username}</p>
-              <p className="text-slate-500 text-xs">Patient</p>
+              <p className="text-slate-500 text-[10px]">Patient</p>
             </div>
-            <button onClick={handleLogout} className="text-slate-500 hover:text-slate-300 transition" title="Logout">
-              <LogOut size={14} />
-            </button>
+            <button onClick={handleLogout} className="text-slate-500 hover:text-slate-300" title="Logout"><LogOut size={14} /></button>
           </div>
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: '#f8f9fa' }}>
         {/* Header */}
-        <div className="h-12 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
-          <h2 className="text-sm font-semibold text-slate-700">
-            {view === 'test' && t('new_test')}
-            {view === 'history' && t('history')}
-            {view === 'progress' && t('progress')}
-            {view === 'chat' && t('chat')}
-          </h2>
+        <div className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+          <Breadcrumb items={['Dashboard', activeLabel]} />
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: '#6366f1' }}>{initials}</div>
+          </div>
         </div>
 
-        {/* Main content */}
-        <div className="flex-1 overflow-hidden">
-          {/* ── New Test view ── */}
-          {view === 'test' && (
-            <div className="h-full flex gap-0 overflow-hidden">
-              {/* Left: CBC Form (fixed 400px) */}
-              <div className="flex-shrink-0 overflow-y-auto p-5 border-r border-slate-200 bg-white" style={{ width: '400px' }}>
-                <CBCForm onSubmit={handleCBCSubmit} loading={loading} />
-                {error && (
-                  <div className="mt-3 bg-red-50 border border-red-200 text-red-600 rounded px-3 py-2 text-sm">{error}</div>
-                )}
-              </div>
+        {/* Quick stats bar */}
+        <div className="flex items-center gap-3 px-5 py-2 bg-white border-b border-slate-100 flex-shrink-0">
+          <StatPill label="Next Appt" value={quickStats.next_appointment || 'None'} color="#6366f1" />
+          <StatPill label="Meds Due" value={badges.medications || 0} color="#f59e0b" />
+          <StatPill label="Adherence" value={quickStats.adherence ? `${quickStats.adherence}%` : '—'} color="#10b981" />
+          <StatPill label="Unread" value={badges.messages || 0} color="#ef4444" />
+        </div>
 
-              {/* Right: Result area */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                {loading && <Skeleton />}
+        {/* Content */}
+        <div id="main-content" className="flex-1 overflow-y-auto p-5">
+          {/* Home */}
+          {view === 'home' && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-4 gap-4">
+                <StatCard label="Total Tests" value={quickStats.total_tests} icon={FlaskConical} color="#6366f1" />
+                <StatCard label="Last HGB" value={quickStats.last_hgb ? `${quickStats.last_hgb} g/dL` : '—'} icon={TrendingUp} color="#10b981" />
+                <StatCard label="Adherence" value={quickStats.adherence ? `${quickStats.adherence}%` : '—'} icon={Pill} color="#f59e0b" />
+                <StatCard label="Appointments" value={badges.appointments || 0} icon={Calendar} color="#8b5cf6" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase mb-3">HGB Trend</p>
+                  <HbTrendChart username={username} compact />
+                </div>
+                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Today's Medications</p>
+                  <MedicationTracker compact />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <button onClick={() => setView('test')} className="bg-indigo-500 text-white rounded-lg p-4 text-sm font-medium hover:bg-indigo-600 transition flex items-center gap-2">
+                  <FlaskConical size={16} /> New Blood Test
+                </button>
+                <button onClick={() => setView('appointments')} className="bg-white border border-slate-200 rounded-lg p-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2">
+                  <Calendar size={16} /> Book Appointment
+                </button>
+                <button onClick={() => setView('education')} className="bg-white border border-slate-200 rounded-lg p-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-2">
+                  <BookOpen size={16} /> Learn About Anemia
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* New Test */}
+          {view === 'test' && (
+            <div className="flex gap-5">
+              <div className="w-96 flex-shrink-0 bg-white rounded-lg border border-slate-200 p-4">
+                <CBCForm onSubmit={handleCBCSubmit} loading={loading} />
+                {error && <div className="mt-3 bg-red-50 border border-red-200 text-red-600 rounded px-3 py-2 text-sm">{error}</div>}
+              </div>
+              <div className="flex-1 space-y-4">
+                {loading && <div className="animate-pulse space-y-3"><div className="h-16 bg-slate-200 rounded" /><div className="h-32 bg-slate-200 rounded" /></div>}
                 {!loading && result && (
                   <>
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{t('prediction_result') || 'Prediction Result'}</h3>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase">Result</h3>
                       <PDFDownloadButton reportData={result} username={username} />
                     </div>
                     <PredictionResult result={result} />
-                    {Array.isArray(result.diet_recs) && result.diet_recs.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={veganOnly}
-                              onChange={(e) => setVeganOnly(e.target.checked)}
-                              className="rounded"
-                            />
-                            {t('vegan_filter')}
-                          </label>
-                        </div>
-                        <DietRecommendations items={result.diet_recs} veganOnly={veganOnly} />
-                      </div>
-                    )}
-                    {Array.isArray(result.health_tips) && result.health_tips.length > 0 && (
-                      <HealthTips tips={result.health_tips} severity={result.severity_level} />
-                    )}
+                    {Array.isArray(result.diet_recs) && result.diet_recs.length > 0 && <DietRecommendations items={result.diet_recs} veganOnly={veganOnly} />}
+                    {Array.isArray(result.health_tips) && result.health_tips.length > 0 && <HealthTips tips={result.health_tips} severity={result.severity_level} />}
                   </>
                 )}
                 {!loading && !result && (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-400 text-sm gap-3">
+                  <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-3">
                     <FlaskConical size={32} className="opacity-30" />
-                    <p>Enter CBC values and submit to see prediction</p>                  </div>
+                    <p>Enter CBC values and submit to see prediction</p>
+                  </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* ── History view ── */}
-          {view === 'history' && (
-            <div className="h-full overflow-y-auto p-5">
-              <ReportHistory username={username} role="patient" />
+          {view === 'history' && <ReportHistory username={username} role="patient" />}
+          {view === 'progress' && <HbTrendChart username={username} />}
+          {view === 'appointments' && (
+            <>
+              <AppointmentCalendar
+                onSlotClick={(slot) => { setBookingSlot(slot); setShowBooking(true); }}
+              />
+              <BookingModal
+                isOpen={showBooking}
+                onClose={() => { setShowBooking(false); setBookingSlot(null); }}
+                doctors={doctors}
+              />
+            </>
+          )}
+          {view === 'medications' && <MedicationTracker />}
+          {view === 'messages' && (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-2">
+              <MessageCircle size={32} className="opacity-30" />
+              <p>Use the chat button in the bottom-right corner</p>
             </div>
           )}
-
-          {/* ── Progress view ── */}
-          {view === 'progress' && (
-            <div className="h-full overflow-y-auto p-5">
-              <HbTrendChart username={username} />
+          {view === 'forum' && (
+            <div className="transition-all duration-200">
+              {forumView === 'list' && (
+                <Forum
+                  onSelectPost={(post) => { setSelectedPost(post); setForumView('detail'); }}
+                  onNewPost={() => setForumView('create')}
+                />
+              )}
+              {forumView === 'detail' && selectedPost && (
+                <PostDetail
+                  postId={selectedPost.id}
+                  onBack={() => { setForumView('list'); setSelectedPost(null); }}
+                />
+              )}
+              {forumView === 'create' && (
+                <CreatePost
+                  onBack={() => setForumView('list')}
+                  onCreated={() => setForumView('list')}
+                />
+              )}
             </div>
           )}
-
-          {/* ── Chat view ── */}
-          {view === 'chat' && (
-            <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-              <div className="text-center space-y-2">
-                <MessageCircle size={32} className="mx-auto opacity-30" />
-                <p>Use the chat button in the bottom-right corner</p>
-              </div>
-            </div>
-          )}
+          {view === 'education' && <EducationCenter />}
+          {view === 'prescriptions' && <PrescriptionView />}
+          {view === 'diet' && <DietRecommendations items={[]} veganOnly={veganOnly} />}
+          {view === 'symptom' && <SymptomChecker />}
+          {view === 'settings' && <ProfileSettings />}
         </div>
+
+        <StatusFooter />
       </div>
 
-      {/* Floating chatbot */}
       <Chatbot />
     </div>
   );

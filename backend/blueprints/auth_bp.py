@@ -28,6 +28,7 @@ from flask import Blueprint, current_app, g, jsonify, request
 
 from db import get_db
 from middleware.auth import JWT_ALGORITHM, JWT_SECRET, require_auth
+from services.audit_service import log_action
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -328,6 +329,14 @@ def login():
 
         # Verify password
         if not _bcrypt_check(password, user["password_hash"]):
+            # --- Audit service log: login failure ---
+            log_action(
+                actor=identifier,
+                action="login_failure",
+                details={"reason": "invalid_credentials"},
+                ip=request.remote_addr,
+            )
+
             # Increment failed_attempts (Task 2.4)
             new_attempts = (user["failed_attempts"] or 0) + 1
             if new_attempts >= 5:
@@ -364,6 +373,13 @@ def login():
         conn.commit()
 
         token = _issue_jwt(user)
+
+        # --- Audit service log: login success ---
+        log_action(
+            actor=user["username"],
+            action="login_success",
+            ip=request.remote_addr,
+        )
 
         return jsonify({
             "status": "ok",

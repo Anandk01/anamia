@@ -137,3 +137,34 @@ def test_alert():
             "triggered": triggered,
         }
     ), 200
+
+
+# ---------------------------------------------------------------------------
+# GET /api/alerts/mine — list alerts for the current doctor
+# ---------------------------------------------------------------------------
+
+@alerts_bp.get("/mine")
+@require_auth
+@require_role("doctor")
+def my_alerts():
+    """Return alert_log rows where recipient_username matches the current doctor."""
+    from flask import g
+    username = g.current_user["username"]
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT alert_id, prediction_id, recipient_email, recipient_username,
+                   patient_username, hgb_value, severity_level, sent_at,
+                   delivery_status, retry_count
+              FROM alert_log
+             WHERE recipient_username = ?
+             ORDER BY sent_at DESC
+            """,
+            (username,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    alerts = [dict(row) for row in rows]
+    return jsonify({"status": "ok", "alerts": alerts, "total": len(alerts)}), 200

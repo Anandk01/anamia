@@ -73,7 +73,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
 
     # ── CORS ──────────────────────────────────────────────────────────────────
-    CORS(app)
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
     # ── Email / SMTP configuration ────────────────────────────────────────────
     app.config["EMAIL_ADDRESS"] = os.getenv("EMAIL_ADDRESS", "")
@@ -102,14 +102,22 @@ def create_app() -> Flask:
         logger.warning("Database initialisation failed: %s", exc)
 
     # ── Blueprint registration ─────────────────────────────────────────────────
-    # All 8 blueprints are imported from the blueprints package.
+    # All blueprints are imported from the blueprints package.
     from blueprints import (  # noqa: PLC0415
         admin_bp,
         alerts_bp,
+        analytics_bp,
+        appointments_bp,
         auth_bp,
         chat_bp,
+        education_bp,
+        forum_bp,
+        medication_bp,
+        notifications_bp,
         ocr_bp,
         predict_bp,
+        prescriptions_bp,
+        profile_bp,
         reports_bp,
         retrain_bp,
     )
@@ -122,6 +130,27 @@ def create_app() -> Flask:
     app.register_blueprint(retrain_bp)
     app.register_blueprint(ocr_bp)
     app.register_blueprint(chat_bp)
+    app.register_blueprint(appointments_bp)
+    app.register_blueprint(medication_bp)
+    app.register_blueprint(forum_bp)
+    app.register_blueprint(education_bp)
+    app.register_blueprint(notifications_bp)
+    app.register_blueprint(prescriptions_bp)
+    app.register_blueprint(analytics_bp)
+    app.register_blueprint(profile_bp)
+
+    # ── Flask-SocketIO (optional) ─────────────────────────────────────────────
+    try:
+        from flask_socketio import SocketIO
+        socketio = SocketIO(app, cors_allowed_origins="*")
+        from services.websocket_service import init_socketio
+        init_socketio(socketio)
+        app.config['SOCKETIO'] = socketio
+        logger.info("Flask-SocketIO initialized successfully.")
+    except ImportError:
+        logger.warning("flask-socketio not installed — WebSocket features disabled.")
+    except Exception as exc:
+        logger.warning("SocketIO initialization failed: %s", exc)
 
     # ── Health endpoint ───────────────────────────────────────────────────────
     @app.route("/health", methods=["GET"])

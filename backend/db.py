@@ -3,7 +3,7 @@ db.py — Database initialisation and connection helpers for the Anemia Detectio
 
 Provides:
   - get_db()                  : opens a SQLite connection to backend/anemia.db
-  - init_db()                 : creates all 6 tables and seeds default accounts
+  - init_db()                 : creates all 8 tables and seeds default accounts
   - log_access_violation(...) : inserts a row into access_violation_log
 """
 
@@ -115,7 +115,220 @@ CREATE TABLE IF NOT EXISTS retrain_log (
     triggered_at    TEXT    NOT NULL,
     completed_at    TEXT
 );
+
+CREATE TABLE IF NOT EXISTS doctor_patient (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_id   INTEGER NOT NULL REFERENCES user(user_id),
+    patient_id  INTEGER NOT NULL REFERENCES user(user_id),
+    assigned_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(doctor_id, patient_id)
+);
+
+CREATE TABLE IF NOT EXISTS appointment (
+    appointment_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_id           INTEGER NOT NULL REFERENCES user(user_id),
+    patient_id          INTEGER NOT NULL REFERENCES user(user_id),
+    requested_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    confirmed_at        TEXT,
+    slot_date           TEXT    NOT NULL,
+    slot_time           TEXT    NOT NULL,
+    duration_min        INTEGER NOT NULL DEFAULT 30,
+    status              TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK(status IN ('pending','confirmed','cancelled','completed')),
+    notes               TEXT,
+    cancellation_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS medication (
+    med_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT    NOT NULL REFERENCES user(username),
+    name          TEXT    NOT NULL,
+    dose_mg       REAL    NOT NULL,
+    frequency     TEXT    NOT NULL CHECK(frequency IN ('daily','twice','thrice','weekly')),
+    start_date    TEXT    NOT NULL,
+    end_date      TEXT,
+    prescribed_by TEXT    REFERENCES user(username),
+    active        INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS medication_log (
+    log_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    med_id    INTEGER NOT NULL REFERENCES medication(med_id),
+    taken_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    skipped   INTEGER NOT NULL DEFAULT 0,
+    notes     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS chat_room (
+    room_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_id       INTEGER NOT NULL REFERENCES user(user_id),
+    patient_id      INTEGER NOT NULL REFERENCES user(user_id),
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    last_message_at TEXT,
+    UNIQUE(doctor_id, patient_id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_message (
+    message_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id         INTEGER NOT NULL REFERENCES chat_room(room_id),
+    sender_username TEXT    NOT NULL,
+    content         TEXT    NOT NULL,
+    message_type    TEXT    NOT NULL DEFAULT 'text'
+                    CHECK(message_type IN ('text','file','image')),
+    file_url        TEXT,
+    read_at         TEXT,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS post (
+    post_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    username   TEXT    NOT NULL REFERENCES user(username),
+    title      TEXT    NOT NULL,
+    body       TEXT    NOT NULL,
+    tags       TEXT,
+    upvotes    INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    anonymous  INTEGER NOT NULL DEFAULT 0,
+    pinned     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS reply (
+    reply_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id            INTEGER NOT NULL REFERENCES post(post_id),
+    username           TEXT    NOT NULL REFERENCES user(username),
+    body               TEXT    NOT NULL,
+    is_doctor_verified INTEGER NOT NULL DEFAULT 0,
+    upvotes            INTEGER NOT NULL DEFAULT 0,
+    created_at         TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS post_upvote (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id  INTEGER NOT NULL REFERENCES post(post_id),
+    username TEXT    NOT NULL,
+    UNIQUE(post_id, username)
+);
+
+CREATE TABLE IF NOT EXISTS reply_upvote (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    reply_id INTEGER NOT NULL REFERENCES reply(reply_id),
+    username TEXT    NOT NULL,
+    UNIQUE(reply_id, username)
+);
+
+CREATE TABLE IF NOT EXISTS article (
+    article_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    title         TEXT    NOT NULL,
+    content_md    TEXT    NOT NULL,
+    summary       TEXT,
+    tags          TEXT,
+    author_id     TEXT    NOT NULL REFERENCES user(username),
+    published_at  TEXT,
+    read_time_min INTEGER,
+    status        TEXT    NOT NULL DEFAULT 'draft'
+                  CHECK(status IN ('draft','published'))
+);
+
+CREATE TABLE IF NOT EXISTS bookmark (
+    bookmark_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username    TEXT    NOT NULL REFERENCES user(username),
+    article_id  INTEGER NOT NULL REFERENCES article(article_id),
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(username, article_id)
+);
+
+CREATE TABLE IF NOT EXISTS model_metrics (
+    metric_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_name       TEXT    NOT NULL,
+    accuracy         REAL    NOT NULL,
+    precision_score  REAL    NOT NULL,
+    recall           REAL    NOT NULL,
+    f1_score         REAL    NOT NULL,
+    auc_roc          REAL,
+    confusion_matrix TEXT,
+    dataset_name     TEXT    NOT NULL,
+    dataset_size     INTEGER NOT NULL,
+    trained_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS notification (
+    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT    NOT NULL REFERENCES user(username),
+    type            TEXT    NOT NULL
+                    CHECK(type IN ('medication','appointment','checkup','alert','forum','system')),
+    title           TEXT    NOT NULL,
+    message         TEXT    NOT NULL,
+    read            INTEGER NOT NULL DEFAULT 0,
+    scheduled_at    TEXT,
+    sent_at         TEXT,
+    delivery_method TEXT    NOT NULL DEFAULT 'push'
+                    CHECK(delivery_method IN ('push','email','both')),
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS prescription (
+    prescription_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_id          TEXT    NOT NULL REFERENCES user(username),
+    patient_id         TEXT    NOT NULL REFERENCES user(username),
+    prediction_id      INTEGER REFERENCES prediction(prediction_id),
+    medications        TEXT    NOT NULL,
+    dosage_instructions TEXT,
+    duration_days      INTEGER,
+    follow_up_date     TEXT,
+    notes              TEXT,
+    created_at         TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    audit_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor      TEXT    NOT NULL,
+    action     TEXT    NOT NULL,
+    target     TEXT,
+    details    TEXT,
+    ip_address TEXT,
+    timestamp  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
 """
+
+# ---------------------------------------------------------------------------
+# ALTER TABLE statements for user table extensions
+# ---------------------------------------------------------------------------
+
+_ALTER_USER_COLUMNS = [
+    "ALTER TABLE user ADD COLUMN blood_type TEXT",
+    "ALTER TABLE user ADD COLUMN known_conditions TEXT",
+    "ALTER TABLE user ADD COLUMN dietary_preferences TEXT",
+    "ALTER TABLE user ADD COLUMN emergency_contact TEXT",
+    "ALTER TABLE user ADD COLUMN specialization TEXT",
+    "ALTER TABLE user ADD COLUMN license_number TEXT",
+    "ALTER TABLE user ADD COLUMN available_hours TEXT",
+    "ALTER TABLE user ADD COLUMN notification_prefs TEXT",
+    "ALTER TABLE user ADD COLUMN theme_pref TEXT DEFAULT 'light'",
+    "ALTER TABLE user ADD COLUMN font_size TEXT DEFAULT 'medium'",
+    "ALTER TABLE user ADD COLUMN high_contrast INTEGER DEFAULT 0",
+    "ALTER TABLE user ADD COLUMN onboarding_complete INTEGER DEFAULT 0",
+]
+
+
+def _extend_user_table(conn: sqlite3.Connection) -> None:
+    """Add new columns to the user table if they don't already exist.
+
+    SQLite raises an error when adding a column that already exists, so each
+    ALTER TABLE statement is wrapped in a try/except that silently ignores
+    the 'duplicate column name' error.
+    """
+    cursor = conn.cursor()
+    for stmt in _ALTER_USER_COLUMNS:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass  # Column already exists — safe to ignore
+            else:
+                raise
+    conn.commit()
+
 
 # ---------------------------------------------------------------------------
 # Default seed accounts
@@ -148,7 +361,7 @@ def _hash_password(plain: str) -> str:
 # ---------------------------------------------------------------------------
 
 def init_db() -> None:
-    """Create all 6 tables (if they don't exist) and seed default accounts.
+    """Create all 8 tables (if they don't exist) and seed default accounts.
 
     Seeding only runs when the *user* table is empty, so it is safe to call
     this function on every application start-up.
@@ -160,6 +373,9 @@ def init_db() -> None:
         # Create tables
         cursor.executescript(_CREATE_TABLES_SQL)
         conn.commit()
+
+        # Extend user table with new columns (idempotent)
+        _extend_user_table(conn)
 
         # Seed default accounts only when the user table is empty
         row = cursor.execute("SELECT COUNT(*) FROM user").fetchone()
