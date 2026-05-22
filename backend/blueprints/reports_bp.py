@@ -186,22 +186,42 @@ def get_trend(target_username: str):
     username = current_user["username"]
     role = current_user.get("role", "patient")
 
-    # Ownership check
-    if role != "admin" and target_username != username:
+    # Ownership check — doctors can view any patient's trend
+    if role not in ("admin", "doctor") and target_username != username:
         return jsonify({"status": "error", "message": "Access denied"}), 403
 
     conn = get_db()
     try:
-        rows = conn.execute(
-            """
-            SELECT date, hgb, severity_level
-            FROM prediction
-            WHERE username = ?
-            ORDER BY date ASC
-            LIMIT 50
-            """,
-            (target_username,),
-        ).fetchall()
+        # Support ?source=doctor filter to only show doctor-submitted predictions
+        source = request.args.get("source")
+        if source == "doctor":
+            rows = conn.execute(
+                """
+                SELECT p.date, p.hgb, p.severity_level
+                FROM prediction p
+                JOIN user u ON p.username = u.username
+                WHERE p.username = ? AND u.role = 'doctor'
+                UNION
+                SELECT p.date, p.hgb, p.severity_level
+                FROM prediction p
+                WHERE p.username = ?
+                  AND EXISTS (SELECT 1 FROM user u2 WHERE u2.username = p.username AND u2.role != 'patient')
+                ORDER BY date ASC
+                LIMIT 50
+                """,
+                (target_username, target_username),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT date, hgb, severity_level
+                FROM prediction
+                WHERE username = ?
+                ORDER BY date ASC
+                LIMIT 50
+                """,
+                (target_username,),
+            ).fetchall()
     finally:
         conn.close()
 

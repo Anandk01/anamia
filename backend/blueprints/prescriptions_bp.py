@@ -32,24 +32,57 @@ def create_prescription():
 
     # Accept both instructions and dosage_instructions
     dosage_instructions = data.get("dosage_instructions") or data.get("instructions") or ""
+    diet_plan = data.get("diet_plan") or ""
 
     conn = get_db()
     try:
         cursor = conn.execute(
             """INSERT INTO prescription
                (doctor_id, patient_id, prediction_id, medications,
-                dosage_instructions, duration_days, follow_up_date, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                dosage_instructions, duration_days, follow_up_date, notes, diet_plan)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (doctor_id, patient_id, data.get("prediction_id"),
              medications, dosage_instructions,
              data.get("duration_days"), data.get("follow_up_date"),
-             data.get("notes")),
+             data.get("notes"), diet_plan),
         )
         conn.commit()
         row = conn.execute(
             "SELECT * FROM prescription WHERE prescription_id = ?",
             (cursor.lastrowid,),
         ).fetchone()
+
+        # Notify patient about new prescription
+        try:
+            conn.execute(
+                "INSERT INTO notification (username, type, title, message) VALUES (?, 'system', 'New Prescription', ?)",
+                (patient_id, f"Dr. {doctor_id} has prescribed medications for you"),
+            )
+            conn.commit()
+        except Exception:
+            pass
+
+        # If follow_up_date is set, create notification and auto-confirmed appointment
+        follow_up_date = data.get("follow_up_date")
+        if follow_up_date:
+            try:
+                conn.execute(
+                    "INSERT INTO notification (username, type, title, message, scheduled_at) VALUES (?, 'appointment', 'Follow-up Appointment', ?, ?)",
+                    (patient_id, f"Follow-up appointment with Dr. {doctor_id}", follow_up_date),
+                )
+                # Get user IDs for appointment
+                doc_row = conn.execute("SELECT user_id FROM user WHERE username = ?", (doctor_id,)).fetchone()
+                pat_row = conn.execute("SELECT user_id FROM user WHERE username = ?", (patient_id,)).fetchone()
+                if doc_row and pat_row:
+                    conn.execute(
+                        """INSERT INTO appointment (doctor_id, patient_id, slot_date, slot_time, status, confirmed_at, notes)
+                           VALUES (?, ?, ?, '10:00', 'confirmed', datetime('now'), 'Follow-up from prescription')""",
+                        (doc_row["user_id"], pat_row["user_id"], follow_up_date),
+                    )
+                conn.commit()
+            except Exception:
+                pass
+
         return jsonify({"status": "ok", "prescription": dict(row)}), 201
     finally:
         conn.close()

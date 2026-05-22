@@ -43,7 +43,7 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export default function HbTrendChart({ username }) {
+export default function HbTrendChart({ username, source }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -52,15 +52,16 @@ export default function HbTrendChart({ username }) {
     if (!username) return;
     setLoading(true);
     setError(null);
+    const url = source ? `/api/trend/${username}?source=${source}` : `/api/trend/${username}`;
     client
-      .get(`/api/trend/${username}`)
+      .get(url)
       .then((res) => setData(res.data.trend || []))
       .catch((err) => {
         if (err.response?.status === 404) setData([]);
         else setError(err.response?.data?.message || 'Failed to load trend data.');
       })
       .finally(() => setLoading(false));
-  }, [username]);
+  }, [username, source]);
 
   if (loading) {
     return (

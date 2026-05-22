@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Pill, Check, SkipForward, Flame } from 'lucide-react';
+import { Pill, Check, SkipForward, Flame, Clock } from 'lucide-react';
 import client from '../api/client';
+
+function getMedTimes(frequency) {
+  switch (frequency) {
+    case 'daily': return '8:00 AM';
+    case 'twice': return '8:00 AM, 8:00 PM';
+    case 'thrice': return '8:00 AM, 2:00 PM, 8:00 PM';
+    case 'weekly': return 'Every Monday 8:00 AM';
+    default: return '8:00 AM';
+  }
+}
 
 export default function MedicationTracker() {
   const [meds, setMeds] = useState([]);
@@ -60,6 +70,9 @@ export default function MedicationTracker() {
                 <div>
                   <p className="font-medium">{med.name}</p>
                   <p className="text-sm text-slate-500">{med.dose_mg}mg • {med.frequency}</p>
+                  <p className="text-xs text-indigo-500 flex items-center gap-1 mt-0.5">
+                    <Clock size={11} /> Take at {getMedTimes(med.frequency)}
+                  </p>
                 </div>
               </div>
 
