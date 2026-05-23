@@ -44,7 +44,7 @@ def get_profile(username):
 
 def update_health_profile(username, data):
     """Update health-related profile fields."""
-    allowed = ['blood_type', 'known_conditions', 'dietary_preferences',
+    allowed = ['full_name', 'blood_type', 'known_conditions', 'dietary_preferences',
                'emergency_contact', 'vegan_diet', 'age', 'sex']
     # Fields that should be stored as JSON strings
     json_fields = ['known_conditions', 'dietary_preferences', 'emergency_contact']

@@ -305,6 +305,7 @@ CREATE TABLE IF NOT EXISTS doctor_availability (
 # ---------------------------------------------------------------------------
 
 _ALTER_USER_COLUMNS = [
+    "ALTER TABLE user ADD COLUMN full_name TEXT",
     "ALTER TABLE user ADD COLUMN blood_type TEXT",
     "ALTER TABLE user ADD COLUMN known_conditions TEXT",
     "ALTER TABLE user ADD COLUMN dietary_preferences TEXT",

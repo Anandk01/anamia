@@ -20,6 +20,7 @@ export default function ProfileSettings() {
   const [message, setMessage] = useState(null);
 
   // Personal info
+  const [fullName, setFullName] = useState('');
   const [bloodType, setBloodType] = useState('');
   const [conditions, setConditions] = useState([]);
   const [dietary, setDietary] = useState([]);
@@ -46,6 +47,7 @@ export default function ProfileSettings() {
     client.get('/api/profile')
       .then(res => {
         const d = res.data?.profile || res.data || {};
+        setFullName(d.full_name || '');
         setBloodType(d.blood_type || '');
         setConditions(d.known_conditions || d.conditions || []);
         setDietary(d.dietary_preferences || []);
@@ -94,6 +96,7 @@ export default function ProfileSettings() {
     setSaving(true);
     try {
       await client.put('/api/profile', {
+        full_name: fullName,
         age: age ? parseInt(age) : null,
         sex: sex !== '' ? parseInt(sex) : null,
         blood_type: bloodType,
@@ -170,6 +173,10 @@ export default function ProfileSettings() {
       {/* Personal Info */}
       {tab === 'personal' && (
         <div className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Full Name</label>
+            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Enter your full name" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Age</label>
