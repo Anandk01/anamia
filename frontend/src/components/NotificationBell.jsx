@@ -36,6 +36,8 @@ export default function NotificationBell() {
       client.get('/api/notifications', { params: { page: 1, limit: 5 } })
         .then(res => setNotifications(res.data?.notifications || []))
         .catch(() => {});
+      // Mark all as read when dropdown opens
+      client.put('/api/notifications/read-all').then(() => setUnreadCount(0)).catch(() => {});
     }
   }, [open]);
 
