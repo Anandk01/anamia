@@ -197,6 +197,8 @@ if __name__ == "__main__":
     app = create_app()
     socketio = app.config.get('SOCKETIO')
     if socketio:
-        socketio.run(app, debug=True)
+        socketio.run(app, host="0.0.0.0", port=5000, debug=True, allow_unsafe_werkzeug=True)
+    else:
+        app.run(host="0.0.0.0", port=5000, debug=True)
     else:
         app.run(debug=True)
