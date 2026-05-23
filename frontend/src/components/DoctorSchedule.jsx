@@ -123,6 +123,16 @@ export default function DoctorSchedule({ compact }) {
     }
   };
 
+  const handleMarkAttended = async (appt) => {
+    try {
+      await client.put(`/api/appointments/${getId(appt)}/attended`);
+      setConfirmed(prev => prev.map(a => getId(a) === getId(appt) ? { ...a, attended: 1, status: 'completed' } : a));
+      showToast("Marked as attended");
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to mark attended", "error");
+    }
+  };
+
   const openDeclinePanel = (apptId) => {
     if (declineId === apptId) {
       setDeclineId(null);
@@ -281,8 +291,25 @@ export default function DoctorSchedule({ compact }) {
                     <p className="text-sm text-slate-600">{getDate(appt)} at {getTime(appt)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Confirmed</span>
-                    <button onClick={() => handleCancelConfirmed(appt)} className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs">Cancel</button>
+                    {/* Attendance status badges */}
+                    {appt.attended === 1 && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700 font-medium">✓ Attended</span>
+                    )}
+                    {appt.attended === 0 && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700 font-medium">✗ Not Attended</span>
+                    )}
+                    {appt.attended == null && (
+                      <>
+                        <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Confirmed</span>
+                        {/* Mark Attended button — only on appointment day */}
+                        {getDate(appt) === new Date().toISOString().split('T')[0] && (
+                          <button onClick={() => handleMarkAttended(appt)} className="p-1.5 bg-green-50 text-green-600 rounded hover:bg-green-100 text-xs font-medium">
+                            ✓ Mark Attended
+                          </button>
+                        )}
+                        <button onClick={() => handleCancelConfirmed(appt)} className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs">Cancel</button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

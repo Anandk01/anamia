@@ -10,6 +10,7 @@ Routes:
     PUT  /api/appointments/<id>/confirm               → doctor confirms appointment
     PUT  /api/appointments/<id>/cancel                → patient or doctor cancels
     PUT  /api/appointments/<id>/complete              → doctor marks as completed
+    PUT  /api/appointments/<id>/attended              → doctor marks attendance on appointment day
     PUT  /api/appointments/<id>/reschedule            → doctor reschedules appointment
     GET  /api/appointments/available-slots            → patient views available slots
 """
@@ -204,6 +205,18 @@ def get_calendar():
     Response JSON (400):
         {"status": "error", "message": "..."}
     """
+    # Auto-expire past confirmed appointments that were never marked attended
+    today_str = date.today().strftime("%Y-%m-%d")
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE appointment SET attended = 0 WHERE status = 'confirmed' AND slot_date < ? AND attended IS NULL",
+            (today_str,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
     week_start = request.args.get("week_start", _get_current_monday())
 
     username = g.current_user["username"]
@@ -472,6 +485,67 @@ def complete_appointment(appointment_id: int):
         conn.close()
 
     return jsonify({"status": "ok", "appointment": updated}), 200
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/appointments/<id>/attended — doctor marks attendance
+# ---------------------------------------------------------------------------
+
+@appointments_bp.put("/<int:appointment_id>/attended")
+@require_auth
+@require_role("doctor")
+def mark_attended(appointment_id: int):
+    """Mark a confirmed appointment as attended (on the appointment day).
+
+    Sets attended=1 and status='completed'. Only the assigned doctor can mark
+    attendance, and only on the day of the appointment.
+
+    Response JSON (200):
+        {"status": "ok", "message": "Marked as attended"}
+
+    Response JSON (400/403/404):
+        {"status": "error", "message": "..."}
+    """
+    username = g.current_user["username"]
+    doctor_id = _get_user_id(username)
+    if doctor_id is None:
+        return jsonify({"status": "error", "message": "User not found"}), 400
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM appointment WHERE appointment_id = ?", (appointment_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "Appointment not found"}), 404
+
+        appt = dict(row)
+
+        if appt["doctor_id"] != doctor_id:
+            return jsonify({"status": "error", "message": "Not authorized"}), 403
+
+        if appt["status"] != "confirmed":
+            return jsonify({"status": "error", "message": "Only confirmed appointments can be marked attended"}), 400
+
+        today_str = date.today().strftime("%Y-%m-%d")
+        if appt["slot_date"] != today_str:
+            return jsonify({"status": "error", "message": "Can only mark attendance on the appointment day"}), 400
+
+        conn.execute(
+            "UPDATE appointment SET status = 'completed', attended = 1 WHERE appointment_id = ?",
+            (appointment_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Notify patient
+    patient_username = _get_username_by_id(appt["patient_id"])
+    if patient_username:
+        _notify_user(patient_username, "appointment", "Appointment Completed",
+                     f"Your appointment on {appt['slot_date']} has been marked as attended.")
+
+    return jsonify({"status": "ok", "message": "Marked as attended"}), 200
 
 
 # ---------------------------------------------------------------------------
