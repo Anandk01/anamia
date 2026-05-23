@@ -289,6 +289,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
     ip_address TEXT,
     timestamp  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS doctor_availability (
+    availability_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_username      TEXT    NOT NULL REFERENCES user(username),
+    day_of_week          INTEGER NOT NULL,
+    start_time           TEXT    NOT NULL,
+    end_time             TEXT    NOT NULL,
+    slot_duration_minutes INTEGER NOT NULL DEFAULT 30
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -314,9 +323,22 @@ _ALTER_PRESCRIPTION_COLUMNS = [
     "ALTER TABLE prescription ADD COLUMN diet_plan TEXT",
 ]
 
+_ALTER_PREDICTION_COLUMNS = [
+    "ALTER TABLE prediction ADD COLUMN doctor_username TEXT",
+    "ALTER TABLE prediction ADD COLUMN clinical_notes TEXT",
+]
+
+_ALTER_MEDICATION_COLUMNS = [
+    "ALTER TABLE medication ADD COLUMN doctor_username TEXT",
+    "ALTER TABLE medication ADD COLUMN prediction_id INTEGER",
+    "ALTER TABLE medication ADD COLUMN dose_unit TEXT DEFAULT 'mg'",
+    "ALTER TABLE medication ADD COLUMN reminder_times TEXT",
+    "ALTER TABLE medication ADD COLUMN added_by TEXT DEFAULT 'doctor'",
+]
+
 
 def _extend_user_table(conn: sqlite3.Connection) -> None:
-    """Add new columns to the user table and prescription table if they don't already exist."""
+    """Add new columns to the user table, prediction table, and medication table if they don't already exist."""
     cursor = conn.cursor()
     for stmt in _ALTER_USER_COLUMNS:
         try:
@@ -327,6 +349,22 @@ def _extend_user_table(conn: sqlite3.Connection) -> None:
             else:
                 raise
     for stmt in _ALTER_PRESCRIPTION_COLUMNS:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass
+            else:
+                raise
+    for stmt in _ALTER_PREDICTION_COLUMNS:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass
+            else:
+                raise
+    for stmt in _ALTER_MEDICATION_COLUMNS:
         try:
             cursor.execute(stmt)
         except sqlite3.OperationalError as e:

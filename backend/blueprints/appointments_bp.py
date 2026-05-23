@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 
 from flask import Blueprint, current_app, g, jsonify, request
 
-from db import get_db
+from db import get_db, get_doctor_for_patient
 from middleware.auth import require_auth
 from middleware.rbac import require_role
 from services import appointment_service
@@ -149,6 +149,13 @@ def request_appointment():
         patient_id = _get_user_id(username)
         if patient_id is None:
             return jsonify({"status": "error", "message": "Patient user not found"}), 400
+
+        # Validate patient is assigned to this doctor
+        doctor_username = _get_username_by_id(int(doctor_id))
+        if doctor_username:
+            assigned_doctor = get_doctor_for_patient(username)
+            if assigned_doctor != doctor_username:
+                return jsonify({"status": "error", "message": "You are not assigned to this doctor"}), 403
 
     try:
         appointment = appointment_service.request_appointment(
@@ -567,5 +574,72 @@ def pending_count():
                 (user_id,),
             ).fetchone()
         return jsonify({"status": "ok", "count": row["cnt"] if row else 0}), 200
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/appointments/availability — doctor sets weekly schedule
+# ---------------------------------------------------------------------------
+
+@appointments_bp.post("/availability")
+@require_auth
+@require_role("doctor")
+def set_availability():
+    """Set or update doctor's weekly availability.
+
+    Request JSON:
+        {
+            "day_of_week": int (0=Monday, 6=Sunday),
+            "start_time": str (HH:MM),
+            "end_time": str (HH:MM),
+            "slot_duration_minutes": int (default 30)
+        }
+    """
+    data = request.get_json(silent=True) or {}
+    doctor_username = g.current_user["username"]
+    day_of_week = data.get("day_of_week")
+    start_time = data.get("start_time")
+    end_time = data.get("end_time")
+    slot_duration = data.get("slot_duration_minutes", 30)
+
+    if day_of_week is None or not start_time or not end_time:
+        return jsonify({"status": "error", "message": "day_of_week, start_time, and end_time are required"}), 400
+
+    conn = get_db()
+    try:
+        # Delete existing entry for this day, then insert new one
+        conn.execute(
+            "DELETE FROM doctor_availability WHERE doctor_username = ? AND day_of_week = ?",
+            (doctor_username, int(day_of_week)),
+        )
+        conn.execute(
+            """INSERT INTO doctor_availability (doctor_username, day_of_week, start_time, end_time, slot_duration_minutes)
+               VALUES (?, ?, ?, ?, ?)""",
+            (doctor_username, int(day_of_week), start_time, end_time, int(slot_duration)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"status": "ok", "saved": True}), 200
+
+
+# ---------------------------------------------------------------------------
+# GET /api/appointments/availability/<doctor_username> — get doctor's schedule
+# ---------------------------------------------------------------------------
+
+@appointments_bp.get("/availability/<doctor_username>")
+@require_auth
+def get_availability(doctor_username: str):
+    """Return doctor's weekly availability schedule."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM doctor_availability WHERE doctor_username = ? ORDER BY day_of_week",
+            (doctor_username,),
+        ).fetchall()
+        schedule = [dict(r) for r in rows]
+        return jsonify({"status": "ok", "availability": schedule}), 200
     finally:
         conn.close()

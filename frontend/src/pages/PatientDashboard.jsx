@@ -26,6 +26,7 @@ import LanguageSelector from '../components/LanguageSelector.jsx';
 import AppointmentCalendar from '../components/AppointmentCalendar.jsx';
 import BookingModal from '../components/BookingModal.jsx';
 import MedicationTracker from '../components/MedicationTracker.jsx';
+import DoctorChat from '../components/DoctorChat.jsx';
 import Forum from '../components/Forum.jsx';
 import PostDetail from '../components/PostDetail.jsx';
 import CreatePost from '../components/CreatePost.jsx';
@@ -85,6 +86,8 @@ export default function PatientDashboard() {
   const [showBooking, setShowBooking] = useState(false);
   const [bookingSlot, setBookingSlot] = useState(null);
   const [doctors, setDoctors] = useState([]);
+  const [assignedDoctor, setAssignedDoctor] = useState(null);
+  const [doctorCheckDone, setDoctorCheckDone] = useState(false);
 
   // Forum state
   const [forumView, setForumView] = useState('list');
@@ -97,12 +100,16 @@ export default function PatientDashboard() {
     client.get('/api/medications/due-today').then(r => setBadges(b => ({ ...b, medications: r.data?.count || 0 }))).catch(() => {});
     // Quick stats
     client.get('/api/profile/quick-stats').then(r => setQuickStats(r.data || {})).catch(() => {});
+    // Check assigned doctor
+    client.get('/api/assignment/my-doctor').then(r => {
+      setAssignedDoctor(r.data?.doctor || null);
+      setDoctorCheckDone(true);
+    }).catch(() => setDoctorCheckDone(true));
     // Fetch doctors for booking modal
     client.get('/api/appointments/doctors').then(r => {
       const list = r.data?.doctors || [];
       setDoctors(list.map(d => ({ id: d.id, name: d.name || d.username, specialization: d.specialization })));
     }).catch(() => {
-      // Fallback: try the admin endpoint (won't work for patients but handles edge cases)
       setDoctors([]);
     });
   }, []);
@@ -274,32 +281,37 @@ export default function PatientDashboard() {
           {view === 'progress' && <HbTrendChart username={username} source="doctor" />}
           {view === 'appointments' && (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-800">Appointments</h2>
-                <button
-                  onClick={() => setShowBooking(true)}
-                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
-                >
-                  + Book Appointment
-                </button>
-              </div>
-              <AppointmentCalendar
-                onSlotClick={(slot) => { setBookingSlot(slot); setShowBooking(true); }}
-              />
-              <BookingModal
-                isOpen={showBooking}
-                onClose={() => { setShowBooking(false); setBookingSlot(null); }}
-                doctors={doctors}
-              />
+              {doctorCheckDone && !assignedDoctor ? (
+                <div className="flex flex-col items-center justify-center h-64 text-slate-500 text-sm gap-3">
+                  <Calendar size={32} className="opacity-30" />
+                  <p className="font-medium">You have not been assigned to a doctor yet.</p>
+                  <p className="text-xs text-slate-400">Please contact admin to get assigned to a doctor before booking appointments.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-slate-800">Appointments</h2>
+                    <button
+                      onClick={() => setShowBooking(true)}
+                      className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
+                    >
+                      + Book Appointment
+                    </button>
+                  </div>
+                  <AppointmentCalendar
+                    onSlotClick={(slot) => { setBookingSlot(slot); setShowBooking(true); }}
+                  />
+                  <BookingModal
+                    isOpen={showBooking}
+                    onClose={() => { setShowBooking(false); setBookingSlot(null); }}
+                    doctors={doctors}
+                  />
+                </>
+              )}
             </>
           )}
           {view === 'medications' && <MedicationTracker />}
-          {view === 'messages' && (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-2">
-              <MessageCircle size={32} className="opacity-30" />
-              <p>Use the chat button in the bottom-right corner</p>
-            </div>
-          )}
+          {view === 'messages' && <DoctorChat />}
           {view === 'forum' && (
             <div className="transition-all duration-200">
               {forumView === 'list' && (

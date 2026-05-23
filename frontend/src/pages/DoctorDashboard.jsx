@@ -22,6 +22,7 @@ import HbTrendChart from '../components/HbTrendChart.jsx';
 import PDFDownloadButton from '../components/PDFDownloadButton.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
 import DoctorSchedule from '../components/DoctorSchedule.jsx';
+import DoctorChat from '../components/DoctorChat.jsx';
 import Forum from '../components/Forum.jsx';
 import PostDetail from '../components/PostDetail.jsx';
 import CreatePost from '../components/CreatePost.jsx';
@@ -29,6 +30,7 @@ import ArticleEditor from '../components/ArticleEditor.jsx';
 import PrescriptionForm from '../components/PrescriptionForm.jsx';
 import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
 import DoctorAvailability from '../components/DoctorAvailability.jsx';
+import PrescribeMedicationForm from '../components/PrescribeMedicationForm.jsx';
 import ProfileSettings from '../components/ProfileSettings.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
@@ -71,10 +73,12 @@ export default function DoctorDashboard() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [patientUsername, setPatientUsername] = useState('');
+  const [assignedPatients, setAssignedPatients] = useState([]);
   const [trendUsername, setTrendUsername] = useState('');
   const [badges, setBadges] = useState({});
   const [quickStats, setQuickStats] = useState({});
   const [alerts, setAlerts] = useState([]);
+  const [showPrescribeModal, setShowPrescribeModal] = useState(false);
 
   // Real-time badge counts from global socket
   const { unreadMessages, pendingAppointments, activeAlerts } = useSocket() || {};
@@ -92,6 +96,10 @@ export default function DoctorDashboard() {
     client.get('/api/notifications/unread-count').then(r => setBadges(b => ({ ...b, messages: r.data?.count || 0 }))).catch(() => {});
     client.get('/api/appointments/pending-count').then(r => setBadges(b => ({ ...b, appointments: r.data?.count || 0 }))).catch(() => {});
     client.get('/api/analytics/overview').then(r => setQuickStats(r.data || {})).catch(() => {});
+    // Fetch assigned patients for CBC form dropdown
+    client.get('/api/assignment/my-patients').then(r => {
+      setAssignedPatients(r.data?.patients || []);
+    }).catch(() => setAssignedPatients([]));
   }, []);
 
   const NAV_ITEMS = [
@@ -261,8 +269,17 @@ export default function DoctorDashboard() {
             <div className="flex gap-5">
               <div className="w-[420px] flex-shrink-0 bg-white rounded-lg border border-slate-200 p-4">
                 <div className="mb-4">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Patient Username</label>
-                  <input type="text" value={patientUsername} onChange={e => setPatientUsername(e.target.value)} placeholder="Enter patient username" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Select Patient</label>
+                  <select
+                    value={patientUsername}
+                    onChange={e => setPatientUsername(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">Select patient...</option>
+                    {assignedPatients.map(p => (
+                      <option key={p.username || p} value={p.username || p}>{p.username || p}</option>
+                    ))}
+                  </select>
                 </div>
                 <CBCForm onSubmit={handleCBCSubmit} loading={loading} />
                 {error && <div className="mt-3 bg-red-50 border border-red-200 text-red-600 rounded px-3 py-2 text-sm">{error}</div>}
@@ -273,7 +290,15 @@ export default function DoctorDashboard() {
                   <>
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-semibold text-slate-500 uppercase">Result</h3>
-                      <PDFDownloadButton reportData={result} username={patientUsername || username} />
+                      <div className="flex gap-2">
+                        <PDFDownloadButton reportData={result} username={patientUsername || username} />
+                        <button
+                          onClick={() => setShowPrescribeModal(true)}
+                          className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700"
+                        >
+                          + Prescribe Medication
+                        </button>
+                      </div>
                     </div>
                     <PredictionResult result={result} />
                     {Array.isArray(result.diet_recs) && result.diet_recs.length > 0 && <DietRecommendations items={result.diet_recs} veganOnly={false} />}
@@ -287,18 +312,27 @@ export default function DoctorDashboard() {
                   </div>
                 )}
               </div>
+
+              {/* Prescribe Medication Modal */}
+              {showPrescribeModal && patientUsername && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-xl p-6 w-[480px] max-h-[80vh] overflow-y-auto shadow-2xl">
+                    <h3 className="text-lg font-semibold mb-4">Prescribe Medication</h3>
+                    <PrescribeMedicationForm
+                      patientUsername={patientUsername}
+                      predictionId={result?.prediction_id}
+                      onClose={() => setShowPrescribeModal(false)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {view === 'records' && <ReportHistory username={username} role="doctor" />}
           {view === 'schedule' && <DoctorSchedule />}
           {view === 'prescribe' && <PrescriptionForm />}
-          {view === 'messages' && (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-2">
-              <MessageCircle size={32} className="opacity-30" />
-              <p>Use the chat button in the bottom-right corner</p>
-            </div>
-          )}
+          {view === 'messages' && <DoctorChat />}
           {view === 'forum' && (
             <div className="transition-all duration-200">
               {forumView === 'list' && (

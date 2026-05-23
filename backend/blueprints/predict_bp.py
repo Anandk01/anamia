@@ -141,6 +141,7 @@ def predict():
 
     # --- Persist to DB ---
     prediction_id = None
+    target_patient = data.get("username", username) if role == "doctor" else username
     try:
         now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         conn = get_db()
@@ -150,11 +151,12 @@ def predict():
                 INSERT INTO prediction (
                     username, rbc, mcv, mch, mchc, rdw, tlc, plt, hgb,
                     anemia_detected, severity_level, anemia_type, confidence,
-                    explanation, diet_recs, health_tips, risk_category, date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    explanation, diet_recs, health_tips, risk_category, date,
+                    doctor_username
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    username,
+                    target_patient,
                     cbc_dict["rbc"],
                     cbc_dict["mcv"],
                     cbc_dict["mch"],
@@ -172,6 +174,7 @@ def predict():
                     json.dumps(health_tips),
                     "N/A",
                     now,
+                    username if role == "doctor" else None,
                 ),
             )
             conn.commit()
@@ -181,6 +184,47 @@ def predict():
     except Exception as exc:
         logger.exception("Failed to persist prediction to DB")
         return jsonify({"status": "error", "message": f"DB persistence failed: {exc}"}), 500
+
+    # --- Notify patient of new report (Spec 04) ---
+    try:
+        from utils import notify_user  # noqa: PLC0415
+        if role == "doctor" and target_patient != username:
+            notify_user(target_patient, 'new_report', {
+                'prediction_id': prediction_id,
+                'doctor_username': username,
+                'risk_category': result.get('risk_category', 'N/A'),
+                'severity': result['severity_level'],
+                'anemia_type': result['anemia_type'],
+                'hgb': float(cbc_dict['hgb']),
+                'date': datetime.utcnow().isoformat()
+            })
+    except Exception as exc:
+        logger.warning("Failed to notify patient: %s", exc)
+
+    # --- Auto-create alerts based on HGB (Spec 04) ---
+    try:
+        hgb_val = float(cbc_dict['hgb'])
+        if hgb_val < 10.0:
+            from utils import notify_user as _nu, notify_admin as _na  # noqa: PLC0415
+            severity_alert = 'critical' if hgb_val < 8.0 else 'warning'
+            alert_msg = f"{'Critical' if hgb_val < 8.0 else 'Low'} HGB detected: {hgb_val} g/dL for patient {target_patient}."
+            conn = get_db()
+            try:
+                conn.execute(
+                    """INSERT INTO alert_log (prediction_id, recipient_email, recipient_username, patient_username, hgb_value, severity_level, sent_at, delivery_status)
+                       VALUES (?, '', ?, ?, ?, ?, datetime('now'), 'auto')""",
+                    (prediction_id, username, target_patient, hgb_val, severity_alert),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            payload = {'patient_username': target_patient, 'message': alert_msg, 'severity': severity_alert, 'hgb': hgb_val}
+            _na('critical_alert', payload)
+            _nu(username, 'patient_alert', payload)
+            if target_patient != username:
+                _nu(target_patient, 'my_alert', payload)
+    except Exception as exc:
+        logger.warning("Auto-alert creation failed: %s", exc)
 
     # --- AI Report Generation (Gemini) ---
     ai_report = None

@@ -114,6 +114,7 @@ def create_app() -> Flask:
         education_bp,
         forum_bp,
         medication_bp,
+        messaging_bp,
         notifications_bp,
         ocr_bp,
         predict_bp,
@@ -140,6 +141,7 @@ def create_app() -> Flask:
     app.register_blueprint(analytics_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(assignment_bp)
+    app.register_blueprint(messaging_bp)
 
     # ── Flask-SocketIO (optional) ─────────────────────────────────────────────
     try:
