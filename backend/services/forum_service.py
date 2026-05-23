@@ -12,14 +12,25 @@ from db import get_db
 
 
 def _row_to_dict(row):
-    return dict(row) if row else {}
+    if not row:
+        return {}
+    d = dict(row)
+    # Parse tags from comma-separated string to array
+    if d.get('tags') and isinstance(d['tags'], str):
+        d['tags'] = [t.strip() for t in d['tags'].split(',') if t.strip()]
+    return d
 
 
 def create_post(username, title, body, tags=None, anonymous=False):
     """Create a new forum post."""
     conn = get_db()
     try:
-        tags_str = ','.join(tags) if isinstance(tags, list) else tags
+        if isinstance(tags, list):
+            tags_str = ','.join([t.strip() for t in tags if t.strip()])
+        elif isinstance(tags, str):
+            tags_str = tags
+        else:
+            tags_str = None
         cursor = conn.execute(
             """INSERT INTO post (username, title, body, tags, anonymous, created_at)
                VALUES (?, ?, ?, ?, ?, ?)""",

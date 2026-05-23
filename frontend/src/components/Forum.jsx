@@ -110,7 +110,7 @@ export default function Forum({ onSelectPost, onNewPost }) {
               </div>
               {post.tags?.length > 0 && (
                 <div className="flex gap-1 mt-2">
-                  {post.tags.map(t => (
+                  {(Array.isArray(post.tags) ? post.tags : (() => { try { return JSON.parse(post.tags); } catch { return []; } })()).map(t => (
                     <span key={t} className="px-2 py-0.5 text-xs bg-slate-100 rounded-full">{t}</span>
                   ))}
                 </div>
