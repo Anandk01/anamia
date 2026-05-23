@@ -454,3 +454,24 @@ def get_history():
         "total_pages": total_pages,
         "total": total,
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# GET /api/medications/due-today — count of medications due today
+# ---------------------------------------------------------------------------
+
+@medication_bp.get("/due-today")
+@require_auth
+@require_role("patient")
+def due_today():
+    """Return count of medications due today for badge display."""
+    username = g.current_user["username"]
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM medication WHERE username = ? AND active = 1",
+            (username,),
+        ).fetchone()
+        return jsonify({"status": "ok", "count": row["cnt"] if row else 0}), 200
+    finally:
+        conn.close()

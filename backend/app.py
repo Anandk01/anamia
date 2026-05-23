@@ -146,15 +146,24 @@ def create_app() -> Flask:
     # ── Flask-SocketIO (optional) ─────────────────────────────────────────────
     try:
         from flask_socketio import SocketIO
-        socketio = SocketIO(app, cors_allowed_origins="*")
+        socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
         from services.websocket_service import init_socketio
         init_socketio(socketio)
         app.config['SOCKETIO'] = socketio
-        logger.info("Flask-SocketIO initialized successfully.")
+        logger.info("Flask-SocketIO initialized successfully with eventlet.")
     except ImportError:
         logger.warning("flask-socketio not installed — WebSocket features disabled.")
     except Exception as exc:
-        logger.warning("SocketIO initialization failed: %s", exc)
+        logger.warning("SocketIO initialization failed: %s — trying without async_mode", exc)
+        try:
+            from flask_socketio import SocketIO as SocketIO2
+            socketio = SocketIO2(app, cors_allowed_origins="*")
+            from services.websocket_service import init_socketio
+            init_socketio(socketio)
+            app.config['SOCKETIO'] = socketio
+            logger.info("Flask-SocketIO initialized (fallback mode).")
+        except Exception:
+            logger.warning("SocketIO completely failed — disabled.")
 
     # ── Health endpoint ───────────────────────────────────────────────────────
     @app.route("/health", methods=["GET"])
