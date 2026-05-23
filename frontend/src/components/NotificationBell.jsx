@@ -75,11 +75,12 @@ export default function NotificationBell() {
             {notifications.map(n => {
               const Icon = TYPE_ICONS[n.type] || TYPE_ICONS.default;
               return (
-                <div key={n.id} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 border-b border-slate-50">
+                <div key={n.id || n.notification_id} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 border-b border-slate-50">
                   <Icon size={16} className="text-indigo-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-700 font-medium truncate">{n.title}</p>
-                    <p className="text-xs text-slate-400">{timeAgo(n.created_at)}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{timeAgo(n.created_at)}</p>
                   </div>
                   {!n.read && <span className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0" />}
                 </div>

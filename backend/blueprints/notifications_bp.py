@@ -13,7 +13,7 @@ from services import notification_service
 notifications_bp = Blueprint("notifications", __name__, url_prefix="/api/notifications")
 
 
-@notifications_bp.get("/")
+@notifications_bp.get("")
 @require_auth
 def list_notifications():
     username = g.current_user["username"]
@@ -32,9 +32,14 @@ def list_notifications():
             "SELECT COUNT(*) FROM notification WHERE username = ?",
             (username,),
         ).fetchone()[0]
+        notifications = []
+        for r in rows:
+            n = dict(r)
+            n["id"] = n.get("notification_id")  # Add 'id' alias for frontend
+            notifications.append(n)
         return jsonify({
             "status": "ok",
-            "notifications": [dict(r) for r in rows],
+            "notifications": notifications,
             "total": total,
             "page": page,
         }), 200
