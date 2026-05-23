@@ -215,7 +215,7 @@ export default function AdminDashboard() {
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
       {/* Sidebar */}
-      <div className="flex flex-col flex-shrink-0 rounded-r-xl" style={{ width: '220px', backgroundColor: '#0f1117' }}>
+      <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
         <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
@@ -259,7 +259,7 @@ export default function AdminDashboard() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
         {/* Header */}
-        <div className="h-12 bg-gradient-to-r from-indigo-500 to-purple-600 border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+        <div className="h-12 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-5 flex-shrink-0">
           <Breadcrumb items={['Admin', activeLabel]} />
           <div className="flex items-center gap-4">
             <HealthDot label="DB" ok={health.db} />

@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 
 from flask import Blueprint, current_app, g, jsonify, request
 
-from db import get_db, get_doctor_for_patient
+from db import get_db
 from middleware.auth import require_auth
 from middleware.rbac import require_role
 from services import appointment_service
@@ -149,13 +149,6 @@ def request_appointment():
         patient_id = _get_user_id(username)
         if patient_id is None:
             return jsonify({"status": "error", "message": "Patient user not found"}), 400
-
-        # Validate patient is assigned to this doctor
-        doctor_username = _get_username_by_id(int(doctor_id))
-        if doctor_username:
-            assigned_doctor = get_doctor_for_patient(username)
-            if assigned_doctor != doctor_username:
-                return jsonify({"status": "error", "message": "You are not assigned to this doctor"}), 403
 
     try:
         appointment = appointment_service.request_appointment(

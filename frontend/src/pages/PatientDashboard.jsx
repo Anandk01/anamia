@@ -86,8 +86,6 @@ export default function PatientDashboard() {
   const [showBooking, setShowBooking] = useState(false);
   const [bookingSlot, setBookingSlot] = useState(null);
   const [doctors, setDoctors] = useState([]);
-  const [assignedDoctor, setAssignedDoctor] = useState(null);
-  const [doctorCheckDone, setDoctorCheckDone] = useState(false);
 
   // Forum state
   const [forumView, setForumView] = useState('list');
@@ -100,11 +98,6 @@ export default function PatientDashboard() {
     client.get('/api/medications/due-today').then(r => setBadges(b => ({ ...b, medications: r.data?.count || 0 }))).catch(() => {});
     // Quick stats
     client.get('/api/profile/quick-stats').then(r => setQuickStats(r.data || {})).catch(() => {});
-    // Check assigned doctor
-    client.get('/api/assignment/my-doctor').then(r => {
-      setAssignedDoctor(r.data?.doctor || null);
-      setDoctorCheckDone(true);
-    }).catch(() => setDoctorCheckDone(true));
     // Fetch doctors for booking modal
     client.get('/api/appointments/doctors').then(r => {
       const list = r.data?.doctors || [];
@@ -151,7 +144,7 @@ export default function PatientDashboard() {
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
       {/* Sidebar */}
-      <div className="flex flex-col flex-shrink-0 rounded-r-xl" style={{ width: '220px', backgroundColor: '#0f1117' }}>
+      <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
         <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
@@ -195,7 +188,7 @@ export default function PatientDashboard() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
         {/* Header */}
-        <div className="h-12 bg-gradient-to-r from-indigo-500 to-purple-600 border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+        <div className="h-12 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-5 flex-shrink-0">
           <Breadcrumb items={['Dashboard', activeLabel]} />
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -281,33 +274,23 @@ export default function PatientDashboard() {
           {view === 'progress' && <HbTrendChart username={username} source="doctor" />}
           {view === 'appointments' && (
             <>
-              {doctorCheckDone && !assignedDoctor ? (
-                <div className="flex flex-col items-center justify-center h-64 text-slate-500 text-sm gap-3">
-                  <Calendar size={32} className="opacity-30" />
-                  <p className="font-medium">You have not been assigned to a doctor yet.</p>
-                  <p className="text-xs text-slate-400">Please contact admin to get assigned to a doctor before booking appointments.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-slate-800">Appointments</h2>
-                    <button
-                      onClick={() => setShowBooking(true)}
-                      className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
-                    >
-                      + Book Appointment
-                    </button>
-                  </div>
-                  <AppointmentCalendar
-                    onSlotClick={(slot) => { setBookingSlot(slot); setShowBooking(true); }}
-                  />
-                  <BookingModal
-                    isOpen={showBooking}
-                    onClose={() => { setShowBooking(false); setBookingSlot(null); }}
-                    doctors={doctors}
-                  />
-                </>
-              )}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Appointments</h2>
+                <button
+                  onClick={() => setShowBooking(true)}
+                  className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
+                >
+                  + Book Appointment
+                </button>
+              </div>
+              <AppointmentCalendar
+                onSlotClick={(slot) => { setBookingSlot(slot); setShowBooking(true); }}
+              />
+              <BookingModal
+                isOpen={showBooking}
+                onClose={() => { setShowBooking(false); setBookingSlot(null); }}
+                doctors={doctors}
+              />
             </>
           )}
           {view === 'medications' && <MedicationTracker />}
