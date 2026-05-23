@@ -519,7 +519,7 @@ def get_available_slots():
 
 @appointments_bp.get("/doctors")
 @require_auth
-@require_role("patient", "admin")
+@require_role("patient", "admin", "doctor")
 def list_doctors():
     """Return list of doctors available for appointment booking.
 
@@ -540,6 +540,67 @@ def list_doctors():
         return jsonify({"status": "ok", "doctors": doctors}), 200
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# POST /api/appointments/forward — doctor forwards case to another doctor
+# ---------------------------------------------------------------------------
+
+@appointments_bp.post("/forward")
+@require_auth
+@require_role("doctor")
+def forward_case():
+    """Forward a patient case to another doctor by creating a pre-confirmed appointment.
+
+    Request JSON:
+        {
+            "patient_username": str,
+            "target_doctor_id": int,
+            "slot_date": str (YYYY-MM-DD),
+            "slot_time": str (HH:MM, default "10:00"),
+            "notes": str (optional)
+        }
+
+    Response JSON (201):
+        {"status": "ok", "appointment": {...}}
+    """
+    data = request.get_json(silent=True) or {}
+    patient_username = data.get("patient_username")
+    target_doctor_id = data.get("target_doctor_id")
+    slot_date = data.get("slot_date")
+    slot_time = data.get("slot_time", "10:00")
+    notes = data.get("notes", "Forwarded case")
+
+    if not patient_username or not target_doctor_id or not slot_date:
+        return jsonify({"status": "error", "message": "patient_username, target_doctor_id, and slot_date are required"}), 400
+
+    # Get patient user_id
+    patient_id = _get_user_id(patient_username)
+    if not patient_id:
+        return jsonify({"status": "error", "message": "Patient not found"}), 404
+
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            """INSERT INTO appointment (doctor_id, patient_id, slot_date, slot_time, status, confirmed_at, notes)
+               VALUES (?, ?, ?, ?, 'confirmed', datetime('now'), ?)""",
+            (int(target_doctor_id), patient_id, slot_date, slot_time, notes),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM appointment WHERE appointment_id = ?", (cursor.lastrowid,)).fetchone()
+    finally:
+        conn.close()
+
+    # Notify target doctor
+    target_username = _get_username_by_id(int(target_doctor_id))
+    if target_username:
+        _notify_user(target_username, "appointment", "Forwarded Case",
+                     f"Dr. {g.current_user['username']} forwarded patient {patient_username} to you on {slot_date}")
+    # Notify patient
+    _notify_user(patient_username, "appointment", "Appointment Scheduled",
+                 f"You have been referred to another doctor on {slot_date} at {slot_time}")
+
+    return jsonify({"status": "ok", "appointment": dict(row)}), 201
 
 
 # ---------------------------------------------------------------------------

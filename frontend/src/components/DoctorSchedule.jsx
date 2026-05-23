@@ -111,6 +111,18 @@ export default function DoctorSchedule({ compact }) {
     }
   };
 
+  const handleCancelConfirmed = async (appt) => {
+    const cancelReason = prompt("Reason for cancellation:");
+    if (!cancelReason) return;
+    try {
+      await client.put(`/api/appointments/${getId(appt)}/cancel`, { reason: cancelReason });
+      setConfirmed(prev => prev.filter(a => getId(a) !== getId(appt)));
+      showToast("Appointment cancelled");
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to cancel", "error");
+    }
+  };
+
   const openDeclinePanel = (apptId) => {
     if (declineId === apptId) {
       setDeclineId(null);
@@ -262,14 +274,17 @@ export default function DoctorSchedule({ compact }) {
         ) : (
           <div className="space-y-2">
             {confirmed.map(appt => (
-              <div key={getId(appt)} className="bg-white border rounded-lg p-3 flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{getPatient(appt)}</p>
-                  <p className="text-sm text-slate-600">{getDate(appt)} at {getTime(appt)}</p>
+              <div key={getId(appt)} className="bg-white border rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{getPatient(appt)}</p>
+                    <p className="text-sm text-slate-600">{getDate(appt)} at {getTime(appt)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Confirmed</span>
+                    <button onClick={() => handleCancelConfirmed(appt)} className="p-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs">Cancel</button>
+                  </div>
                 </div>
-                <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-                  Confirmed
-                </span>
               </div>
             ))}
           </div>

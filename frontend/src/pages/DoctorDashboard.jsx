@@ -79,6 +79,9 @@ export default function DoctorDashboard() {
   const [quickStats, setQuickStats] = useState({});
   const [alerts, setAlerts] = useState([]);
   const [showPrescribeModal, setShowPrescribeModal] = useState(false);
+  const [forwardModal, setForwardModal] = useState({ open: false, patientUsername: '' });
+  const [forwardDoctors, setForwardDoctors] = useState([]);
+  const [forwardForm, setForwardForm] = useState({ target_doctor_id: '', slot_date: '', slot_time: '10:00', notes: '' });
 
   // Real-time badge counts from global socket
   const { unreadMessages, pendingAppointments, activeAlerts } = useSocket() || {};
@@ -140,6 +143,31 @@ export default function DoctorDashboard() {
       setBadges(b => ({ ...b, alerts: Math.max(0, (b.alerts || 0) - 1) }));
     } catch {}
   }
+
+  const openForwardModal = async (patientUser) => {
+    setForwardModal({ open: true, patientUsername: patientUser });
+    setForwardForm({ target_doctor_id: '', slot_date: '', slot_time: '10:00', notes: '' });
+    try {
+      const res = await client.get('/api/appointments/doctors');
+      setForwardDoctors((res.data?.doctors || []).filter(d => d.name !== username));
+    } catch {
+      setForwardDoctors([]);
+    }
+  };
+
+  const handleForwardCase = async () => {
+    if (!forwardForm.target_doctor_id || !forwardForm.slot_date) return;
+    try {
+      await client.post('/api/appointments/forward', {
+        patient_username: forwardModal.patientUsername,
+        target_doctor_id: parseInt(forwardForm.target_doctor_id),
+        slot_date: forwardForm.slot_date,
+        slot_time: forwardForm.slot_time || '10:00',
+        notes: forwardForm.notes || 'Forwarded case',
+      });
+      setForwardModal({ open: false, patientUsername: '' });
+    } catch {}
+  };
 
   const initials = username.slice(0, 2).toUpperCase();
   const activeLabel = NAV_ITEMS.find(n => n.id === view)?.label || 'Dashboard';
@@ -329,7 +357,7 @@ export default function DoctorDashboard() {
 
           {view === 'records' && <ReportHistory username={username} role="doctor" />}
           {view === 'schedule' && <DoctorSchedule />}
-          {view === 'prescribe' && <PrescriptionForm />}
+          {view === 'prescribe' && <PrescriptionForm initialPatientUsername={patientUsername} />}
           {view === 'messages' && <DoctorChat />}
           {view === 'forum' && (
             <div className="transition-all duration-200">
@@ -368,7 +396,7 @@ export default function DoctorDashboard() {
               {alerts.map(alert => (
                 <div
                   key={alert.alert_id}
-                  className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 cursor-pointer hover:bg-slate-50 transition border-l-4 ${!alert.read ? 'border-l-red-500' : 'border-l-transparent'}`}
+                  className={`flex items-start gap-3 px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition border-l-4 ${!alert.read ? 'border-l-red-500' : 'border-l-transparent'}`}
                   onClick={() => markAlertRead(alert.alert_id)}
                 >
                   <div className="flex-1 min-w-0">
@@ -376,7 +404,21 @@ export default function DoctorDashboard() {
                     <p className="text-xs text-slate-500 mt-0.5">HGB: {alert.hgb_value} g/dL · Severity: {alert.severity_level}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{alert.sent_at}</p>
                   </div>
-                  {!alert.read && <span className="text-xs text-red-600 font-semibold">Unread</span>}
+                  <div className="flex items-center gap-2">
+                    {!alert.read && <span className="text-xs text-red-600 font-semibold">Unread</span>}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPatientUsername(alert.patient_username); setView('prescribe'); }}
+                      className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                    >
+                      Prescribe
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openForwardModal(alert.patient_username); }}
+                      className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+                    >
+                      Forward
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -400,6 +442,49 @@ export default function DoctorDashboard() {
 
         <StatusFooter />
       </div>
+
+      {/* Forward Case Modal */}
+      {forwardModal.open && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-[420px] shadow-2xl">
+            <h3 className="text-lg font-semibold mb-1">Forward Patient Case</h3>
+            <p className="text-sm text-slate-500 mb-4">Patient: <span className="font-medium text-slate-700">{forwardModal.patientUsername}</span></p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Target Doctor</label>
+                <select
+                  value={forwardForm.target_doctor_id}
+                  onChange={e => setForwardForm(f => ({ ...f, target_doctor_id: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select a doctor...</option>
+                  {forwardDoctors.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} — {d.specialization}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Date</label>
+                  <input type="date" value={forwardForm.slot_date} onChange={e => setForwardForm(f => ({ ...f, slot_date: e.target.value }))} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Time</label>
+                  <input type="time" value={forwardForm.slot_time} onChange={e => setForwardForm(f => ({ ...f, slot_time: e.target.value }))} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Notes</label>
+                <textarea value={forwardForm.notes} onChange={e => setForwardForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Additional notes..." className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={handleForwardCase} disabled={!forwardForm.target_doctor_id || !forwardForm.slot_date} className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">Forward Case</button>
+                <button onClick={() => setForwardModal({ open: false, patientUsername: '' })} className="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

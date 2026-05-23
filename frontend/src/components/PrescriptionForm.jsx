@@ -4,8 +4,8 @@ import client from '../api/client';
 
 const emptyMed = { name: '', dose: '', frequency: '', duration: '' };
 
-export default function PrescriptionForm() {
-  const [patientUsername, setPatientUsername] = useState('');
+export default function PrescriptionForm({ initialPatientUsername = '' }) {
+  const [patientUsername, setPatientUsername] = useState(initialPatientUsername);
   const [medications, setMedications] = useState([{ ...emptyMed }]);
   const [instructions, setInstructions] = useState('');
   const [durationDays, setDurationDays] = useState('');
@@ -15,6 +15,11 @@ export default function PrescriptionForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
+
+  // Update patient username when prop changes (e.g. from alert prescribe button)
+  React.useEffect(() => {
+    if (initialPatientUsername) setPatientUsername(initialPatientUsername);
+  }, [initialPatientUsername]);
 
   function addMed() {
     setMedications([...medications, { ...emptyMed }]);

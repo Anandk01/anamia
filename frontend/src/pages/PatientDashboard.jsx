@@ -101,6 +101,7 @@ export default function PatientDashboard() {
   const [showBooking, setShowBooking] = useState(false);
   const [bookingSlot, setBookingSlot] = useState(null);
   const [doctors, setDoctors] = useState([]);
+  const [myAppointments, setMyAppointments] = useState([]);
 
   // Forum state
   const [forumView, setForumView] = useState('list');
@@ -120,7 +121,34 @@ export default function PatientDashboard() {
     }).catch(() => {
       setDoctors([]);
     });
+    // Fetch appointments for cancel list
+    fetchMyAppointments();
   }, []);
+
+  function getThisMonday() {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d.toISOString().split('T')[0];
+  }
+
+  const fetchMyAppointments = () => {
+    client.get('/api/appointments/calendar?week_start=' + getThisMonday())
+      .then(r => setMyAppointments(r.data?.appointments || []))
+      .catch(() => {});
+  };
+
+  const cancelMyAppointment = async (appointmentId) => {
+    const reason = prompt("Reason for cancellation:");
+    if (!reason) return;
+    try {
+      await client.put(`/api/appointments/${appointmentId}/cancel`, { reason });
+      setMyAppointments(prev => prev.map(a =>
+        (a.appointment_id || a.id) === appointmentId ? { ...a, status: 'cancelled' } : a
+      ));
+    } catch {}
+  };
 
   const NAV_ITEMS = [
     { id: 'home', label: 'Home', Icon: Home },
@@ -301,6 +329,24 @@ export default function PatientDashboard() {
               <AppointmentCalendar
                 onSlotClick={(slot) => { setBookingSlot(slot); setShowBooking(true); }}
               />
+              {/* My Upcoming Appointments with Cancel */}
+              <div className="mt-4 space-y-2">
+                <h3 className="text-sm font-semibold text-slate-600">My Upcoming Appointments</h3>
+                {myAppointments.filter(a => a.status !== 'cancelled').length === 0 && (
+                  <p className="text-sm text-slate-400">No upcoming appointments</p>
+                )}
+                {myAppointments.filter(a => a.status !== 'cancelled').map(appt => (
+                  <div key={appt.appointment_id || appt.id} className="flex items-center justify-between bg-white border rounded-lg p-3">
+                    <div>
+                      <p className="text-sm font-medium">{appt.slot_date} at {appt.slot_time}</p>
+                      <p className="text-xs text-slate-500">Status: <span className={appt.status === 'confirmed' ? 'text-green-600' : 'text-yellow-600'}>{appt.status}</span></p>
+                    </div>
+                    {appt.status !== 'completed' && (
+                      <button onClick={() => cancelMyAppointment(appt.appointment_id || appt.id)} className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded hover:bg-red-50">Cancel</button>
+                    )}
+                  </div>
+                ))}
+              </div>
               <BookingModal
                 isOpen={showBooking}
                 onClose={() => { setShowBooking(false); setBookingSlot(null); }}

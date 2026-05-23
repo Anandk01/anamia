@@ -16,7 +16,7 @@ Routes:
 
 from flask import Blueprint, g, jsonify, request
 
-from db import get_db, get_doctor_for_patient, get_patients_for_doctor
+from db import get_db, get_doctor_for_patient
 from middleware.auth import require_auth
 from middleware.rbac import require_role
 from services import medication_service
@@ -127,11 +127,6 @@ def prescribe_medication_full():
 
     if not patient_username or not name or dose_mg is None or not frequency or not start_date:
         return jsonify({"status": "error", "message": "patient_username, name, dose_mg, frequency, and start_date are required"}), 400
-
-    # Validate assignment
-    assigned_patients = get_patients_for_doctor(doctor_username)
-    if patient_username not in assigned_patients:
-        return jsonify({"status": "error", "message": "Patient is not assigned to you"}), 403
 
     reminder_times_json = _json.dumps(reminder_times) if reminder_times else None
 
