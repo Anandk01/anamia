@@ -16,7 +16,7 @@ from services import profile_service
 profile_bp = Blueprint("profile", __name__, url_prefix="/api/profile")
 
 
-@profile_bp.get("/")
+@profile_bp.get("")
 @require_auth
 def get_profile():
     username = g.current_user["username"]
@@ -52,7 +52,7 @@ def get_patient_profile(username):
         conn.close()
 
 
-@profile_bp.put("/")
+@profile_bp.put("")
 @require_auth
 def update_profile():
     username = g.current_user["username"]
