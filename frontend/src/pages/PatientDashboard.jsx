@@ -11,6 +11,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth.js';
+import { useSocket } from '../contexts/SocketContext.jsx';
 import client from '../api/client.js';
 
 import CBCForm from '../components/CBCForm.jsx';
@@ -77,6 +78,9 @@ export default function PatientDashboard() {
   const [badges, setBadges] = useState({});
   const [quickStats, setQuickStats] = useState({});
 
+  // Real-time badge counts from global socket
+  const { unreadMessages, pendingAppointments, activeAlerts } = useSocket() || {};
+
   // Booking modal state
   const [showBooking, setShowBooking] = useState(false);
   const [bookingSlot, setBookingSlot] = useState(null);
@@ -108,9 +112,9 @@ export default function PatientDashboard() {
     { id: 'test', label: 'New Test', Icon: FlaskConical },
     { id: 'history', label: 'History', Icon: Table2 },
     { id: 'progress', label: 'Progress', Icon: TrendingUp },
-    { id: 'appointments', label: 'Appointments', Icon: Calendar, badge: badges.appointments },
+    { id: 'appointments', label: 'Appointments', Icon: Calendar, badge: pendingAppointments || badges.appointments },
     { id: 'medications', label: 'Medications', Icon: Pill, badge: badges.medications, badgeColor: '#f59e0b' },
-    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: badges.messages },
+    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: unreadMessages || badges.messages },
     { id: 'forum', label: 'Forum', Icon: MessageSquare },
     { id: 'education', label: 'Education', Icon: BookOpen },
     { id: 'prescriptions', label: 'Prescriptions', Icon: FileText },

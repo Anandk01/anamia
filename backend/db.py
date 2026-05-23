@@ -464,3 +464,39 @@ def log_access_violation(
         conn.commit()
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Doctor-Patient Assignment helpers
+# ---------------------------------------------------------------------------
+
+def get_patients_for_doctor(doctor_username: str) -> list[str]:
+    """Returns list of patient usernames assigned to this doctor."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT u.username FROM doctor_patient dp
+               JOIN user u ON u.user_id = dp.patient_id
+               JOIN user d ON d.user_id = dp.doctor_id
+               WHERE d.username = ?""",
+            (doctor_username,)
+        ).fetchall()
+        return [r['username'] for r in rows]
+    finally:
+        conn.close()
+
+
+def get_doctor_for_patient(patient_username: str) -> str | None:
+    """Returns the doctor username assigned to this patient, or None."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """SELECT d.username FROM doctor_patient dp
+               JOIN user d ON d.user_id = dp.doctor_id
+               JOIN user p ON p.user_id = dp.patient_id
+               WHERE p.username = ?""",
+            (patient_username,)
+        ).fetchone()
+        return row['username'] if row else None
+    finally:
+        conn.close()

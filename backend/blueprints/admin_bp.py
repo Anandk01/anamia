@@ -484,3 +484,110 @@ def deactivate_user(user_id: int):
             "message": f"User '{target['username']}' has been deactivated.",
         }
     ), 200
+
+
+# ---------------------------------------------------------------------------
+# Doctor-Patient Assignment endpoints
+# ---------------------------------------------------------------------------
+
+@admin_bp.get("/unassigned-patients")
+@require_auth
+@require_role("admin")
+def unassigned_patients():
+    """Return all active patients not yet assigned to any doctor."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT u.username, u.email, u.created_at FROM user u
+               WHERE u.role = 'patient' AND u.status = 'active'
+               AND u.user_id NOT IN (SELECT patient_id FROM doctor_patient)"""
+        ).fetchall()
+        return jsonify({"status": "ok", "patients": [dict(r) for r in rows]}), 200
+    finally:
+        conn.close()
+
+
+@admin_bp.get("/assignments")
+@require_auth
+@require_role("admin")
+def list_assignments():
+    """Return all doctor-patient assignments."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT d.username as doctor_username, p.username as patient_username, dp.assigned_at
+               FROM doctor_patient dp
+               JOIN user d ON d.user_id = dp.doctor_id
+               JOIN user p ON p.user_id = dp.patient_id
+               ORDER BY dp.assigned_at DESC"""
+        ).fetchall()
+        return jsonify({"status": "ok", "assignments": [dict(r) for r in rows]}), 200
+    finally:
+        conn.close()
+
+
+@admin_bp.post("/assign")
+@require_auth
+@require_role("admin")
+def assign_patients():
+    """Assign one or more patients to a doctor."""
+    data = request.get_json(silent=True) or {}
+    doctor_username = data.get("doctor_username")
+    patient_usernames = data.get("patient_usernames", [])
+    if not doctor_username or not patient_usernames:
+        return jsonify({"status": "error", "message": "doctor_username and patient_usernames required"}), 400
+
+    conn = get_db()
+    try:
+        doc = conn.execute(
+            "SELECT user_id FROM user WHERE username = ? AND role = 'doctor'",
+            (doctor_username,)
+        ).fetchone()
+        if not doc:
+            return jsonify({"status": "error", "message": "Doctor not found"}), 404
+
+        assigned = 0
+        for pu in patient_usernames:
+            pat = conn.execute(
+                "SELECT user_id FROM user WHERE username = ? AND role = 'patient'",
+                (pu,)
+            ).fetchone()
+            if pat:
+                try:
+                    conn.execute(
+                        "INSERT INTO doctor_patient (doctor_id, patient_id) VALUES (?, ?)",
+                        (doc["user_id"], pat["user_id"])
+                    )
+                    assigned += 1
+                except Exception:
+                    pass  # duplicate, skip
+        conn.commit()
+        return jsonify({"status": "ok", "assigned": assigned}), 200
+    finally:
+        conn.close()
+
+
+@admin_bp.delete("/unassign")
+@require_auth
+@require_role("admin")
+def unassign_patient():
+    """Remove a patient from a doctor's assignment."""
+    data = request.get_json(silent=True) or {}
+    doctor_username = data.get("doctor_username")
+    patient_username = data.get("patient_username")
+    if not doctor_username or not patient_username:
+        return jsonify({"status": "error", "message": "doctor_username and patient_username required"}), 400
+
+    conn = get_db()
+    try:
+        doc = conn.execute("SELECT user_id FROM user WHERE username = ?", (doctor_username,)).fetchone()
+        pat = conn.execute("SELECT user_id FROM user WHERE username = ?", (patient_username,)).fetchone()
+        if doc and pat:
+            conn.execute(
+                "DELETE FROM doctor_patient WHERE doctor_id = ? AND patient_id = ?",
+                (doc["user_id"], pat["user_id"])
+            )
+            conn.commit()
+        return jsonify({"status": "ok", "unassigned": True}), 200
+    finally:
+        conn.close()

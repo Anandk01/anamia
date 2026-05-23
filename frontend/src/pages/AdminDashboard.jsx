@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Users, Brain, BarChart3, GitCompare, RefreshCw,
   Bell, FileText, MessageSquare, BookOpen, Activity, Settings,
-  LogOut, Plus, X, CheckCircle, XCircle, Loader2,
+  LogOut, Plus, X, CheckCircle, XCircle, Loader2, UserPlus,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -24,6 +24,7 @@ import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
 import ModelComparison from '../components/ModelComparison.jsx';
 import Forum from '../components/Forum.jsx';
 import ArticleEditor from '../components/ArticleEditor.jsx';
+import AssignmentPanel from '../components/AssignmentPanel.jsx';
 import ProfileSettings from '../components/ProfileSettings.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
@@ -165,6 +166,7 @@ export default function AdminDashboard() {
   const NAV_ITEMS = [
     { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
     { id: 'users', label: 'Users', Icon: Users },
+    { id: 'assignments', label: 'Assignments', Icon: UserPlus },
     { id: 'schedule', label: 'Schedule Appt', Icon: Activity },
     { id: 'predictions', label: 'Predictions', Icon: Brain },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
@@ -442,6 +444,7 @@ export default function AdminDashboard() {
           )}
 
           {view === 'schedule' && <AdminScheduleAppointment />}
+          {view === 'assignments' && <AssignmentPanel />}
 
           {view === 'predictions' && (
             <div className="space-y-4">

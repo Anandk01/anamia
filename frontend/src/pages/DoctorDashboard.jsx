@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
+import { useSocket } from '../contexts/SocketContext.jsx';
 import client from '../api/client.js';
 
 import CBCForm from '../components/CBCForm.jsx';
@@ -75,6 +76,9 @@ export default function DoctorDashboard() {
   const [quickStats, setQuickStats] = useState({});
   const [alerts, setAlerts] = useState([]);
 
+  // Real-time badge counts from global socket
+  const { unreadMessages, pendingAppointments, activeAlerts } = useSocket() || {};
+
   // Forum state
   const [forumView, setForumView] = useState('list');
   const [selectedPost, setSelectedPost] = useState(null);
@@ -94,13 +98,13 @@ export default function DoctorDashboard() {
     { id: 'home', label: 'Home', Icon: Home },
     { id: 'assessment', label: 'New Assessment', Icon: FlaskConical },
     { id: 'records', label: 'Patient Records', Icon: Users },
-    { id: 'schedule', label: 'Appointments', Icon: Calendar, badge: badges.appointments, badgeColor: '#3b82f6' },
+    { id: 'schedule', label: 'Appointments', Icon: Calendar, badge: pendingAppointments || badges.appointments, badgeColor: '#3b82f6' },
     { id: 'prescribe', label: 'Prescribe', Icon: FileText },
-    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: badges.messages },
+    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: unreadMessages || badges.messages },
     { id: 'forum', label: 'Forum', Icon: MessageSquare },
     { id: 'articles', label: 'Articles', Icon: BookOpen },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
-    { id: 'alerts', label: 'Alerts', Icon: Bell, badge: badges.alerts, badgeColor: '#ef4444' },
+    { id: 'alerts', label: 'Alerts', Icon: Bell, badge: activeAlerts || badges.alerts, badgeColor: '#ef4444' },
     { id: 'trends', label: 'Hb Trends', Icon: TrendingUp },
     { id: 'settings', label: 'Settings', Icon: Settings },
   ];

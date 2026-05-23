@@ -3,18 +3,24 @@ websocket_service.py — SocketIO event handlers for real-time messaging.
 
 Provides WebSocket events for:
   - connect/disconnect with JWT auth
+  - join_personal_room (global room per user)
   - join_room / send_message / message_read
   - typing_start / typing_stop
 """
 
 import logging
+import jwt
+import os
 
+from flask import request
 from db import get_db
 
 logger = logging.getLogger(__name__)
 
 # Will be initialized by app.py
 socketio = None
+
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
 
 
 def init_socketio(sio):
@@ -24,8 +30,32 @@ def init_socketio(sio):
 
     @sio.on('connect')
     def handle_connect(auth=None):
-        """Authenticate user via JWT token passed in auth dict."""
-        logger.info("Client connected")
+        """Authenticate user via JWT token passed in query params."""
+        token = request.args.get('token')
+        if not token:
+            logger.warning("WebSocket connection rejected: no token")
+            return False
+        try:
+            data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            request.environ['user'] = data.get('username') or data.get('sub')
+            request.environ['role'] = data.get('role')
+            logger.info("Client connected: %s", request.environ['user'])
+        except Exception as exc:
+            logger.warning("WebSocket connection rejected: %s", exc)
+            return False
+
+    @sio.on('join_personal_room')
+    def handle_join_personal_room(data):
+        """Join user's personal room and optionally admin_room."""
+        from flask_socketio import join_room
+        username = data.get('username')
+        role = data.get('role')
+        if username:
+            join_room(f"user_{username}")
+            logger.info("User %s joined personal room", username)
+        if role == 'admin':
+            join_room('admin_room')
+            logger.info("Admin %s joined admin_room", username)
 
     @sio.on('disconnect')
     def handle_disconnect():
