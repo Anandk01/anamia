@@ -60,10 +60,12 @@ def get_reports():
 
     Query params:
         page (int, default 1) — 1-based page number
+        username (str, optional) — for doctors, fetch a specific patient's reports
 
     Role behaviour:
-        patient / doctor : only their own records (WHERE username = current_user)
-        admin            : all records
+        patient : only their own records (WHERE username = current_user)
+        doctor  : own records by default, or specific patient if ?username= provided
+        admin   : all records
 
     Returns:
         200: {"status": "ok", "records": [...], "total": N, "page": P, "pages": total_pages}
@@ -81,11 +83,21 @@ def get_reports():
     except (ValueError, TypeError):
         return jsonify({"status": "error", "message": "Invalid 'page' parameter"}), 400
 
+    # Allow doctors to query a specific patient's reports
+    target_username = request.args.get("username")
+    if target_username and role == "doctor":
+        query_username = target_username
+    elif role == "admin":
+        query_username = None  # admin sees all
+    else:
+        query_username = username
+
     offset = (page - 1) * PAGE_SIZE
 
     conn = get_db()
     try:
-        if role == "admin":
+        if query_username is None:
+            # Admin: all records
             total_row = conn.execute(
                 "SELECT COUNT(*) FROM prediction"
             ).fetchone()
@@ -98,13 +110,13 @@ def get_reports():
         else:
             total_row = conn.execute(
                 "SELECT COUNT(*) FROM prediction WHERE username = ?",
-                (username,),
+                (query_username,),
             ).fetchone()
             total = total_row[0]
 
             rows = conn.execute(
                 "SELECT * FROM prediction WHERE username = ? ORDER BY date DESC LIMIT ? OFFSET ?",
-                (username, PAGE_SIZE, offset),
+                (query_username, PAGE_SIZE, offset),
             ).fetchall()
     finally:
         conn.close()

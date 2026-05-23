@@ -175,7 +175,7 @@ CREATE TABLE IF NOT EXISTS chat_message (
     sender_username TEXT    NOT NULL,
     content         TEXT    NOT NULL,
     message_type    TEXT    NOT NULL DEFAULT 'text'
-                    CHECK(message_type IN ('text','file','image')),
+                    CHECK(message_type IN ('text','file','image','case_forward')),
     file_url        TEXT,
     read_at         TEXT,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -401,6 +401,45 @@ def _hash_password(plain: str) -> str:
     return hashed.decode("utf-8")
 
 
+def _migrate_chat_message_table(conn: sqlite3.Connection) -> None:
+    """Migrate chat_message table to support 'case_forward' message_type.
+
+    SQLite doesn't support ALTER TABLE to modify CHECK constraints, so we
+    recreate the table if the old constraint doesn't include 'case_forward'.
+    """
+    cursor = conn.cursor()
+    # Check if the table has the old constraint by trying an insert with case_forward
+    try:
+        cursor.execute(
+            "INSERT INTO chat_message (room_id, sender_username, content, message_type) VALUES (0, '__test__', '__test__', 'case_forward')"
+        )
+        # If it succeeds, the constraint already allows case_forward — rollback the test row
+        conn.rollback()
+    except sqlite3.IntegrityError:
+        # Constraint doesn't allow case_forward — need to migrate
+        conn.rollback()
+        cursor.executescript("""
+            CREATE TABLE IF NOT EXISTS chat_message_new (
+                message_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id         INTEGER NOT NULL REFERENCES chat_room(room_id),
+                sender_username TEXT    NOT NULL,
+                content         TEXT    NOT NULL,
+                message_type    TEXT    NOT NULL DEFAULT 'text'
+                                CHECK(message_type IN ('text','file','image','case_forward')),
+                file_url        TEXT,
+                read_at         TEXT,
+                created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+            );
+            INSERT INTO chat_message_new SELECT * FROM chat_message;
+            DROP TABLE chat_message;
+            ALTER TABLE chat_message_new RENAME TO chat_message;
+        """)
+        conn.commit()
+    except sqlite3.OperationalError:
+        # Table might not exist yet (fresh DB) — that's fine
+        conn.rollback()
+
+
 # ---------------------------------------------------------------------------
 # Initialisation
 # ---------------------------------------------------------------------------
@@ -421,6 +460,9 @@ def init_db() -> None:
 
         # Extend user table with new columns (idempotent)
         _extend_user_table(conn)
+
+        # Migrate chat_message table to support 'case_forward' message_type
+        _migrate_chat_message_table(conn)
 
         # Seed default accounts only when the user table is empty
         row = cursor.execute("SELECT COUNT(*) FROM user").fetchone()

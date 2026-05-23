@@ -1,19 +1,20 @@
 """
 Messaging Blueprint — /api/messages
 
-Real-time doctor-patient messaging endpoints.
+Doctor-to-doctor messaging endpoints.
 
 Routes:
-    GET  /api/messages/room/<patient_username>  → get/create room, return messages
-    POST /api/messages/send                     → send a message
-    GET  /api/messages/unread-count             → count unread messages
-    GET  /api/messages/rooms                    → doctor's room list
-    POST /api/messages/mark-read               → mark messages as read
+    GET  /api/messages/doctors                      → list all doctors (for search)
+    GET  /api/messages/rooms                        → doctor's room list (doctor-to-doctor)
+    GET  /api/messages/room/<other_doctor_username> → get/create room between two doctors
+    POST /api/messages/send                         → send a message
+    GET  /api/messages/unread-count                 → count unread messages
+    POST /api/messages/mark-read                    → mark messages as read
 """
 
 from flask import Blueprint, g, jsonify, request
 
-from db import get_db, get_doctor_for_patient, get_patients_for_doctor
+from db import get_db
 from middleware.auth import require_auth
 from middleware.rbac import require_role
 from utils import notify_user
@@ -31,64 +32,128 @@ def _get_user_id(username: str) -> int | None:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/messages/room/<patient_username>
+# GET /api/messages/doctors — list all active doctors for search
 # ---------------------------------------------------------------------------
 
-@messaging_bp.get("/room/<patient_username>")
+@messaging_bp.get("/doctors")
 @require_auth
-def get_room(patient_username: str):
-    """Get or create a chat room and return last 50 messages.
-
-    For doctor: validates patient is assigned.
-    For patient: patient_username must be self, room is with assigned doctor.
-    """
+@require_role("doctor")
+def list_doctors():
+    """Return all active doctors except the current user (for search/start conversation)."""
     username = g.current_user["username"]
-    role = g.current_user["role"]
 
-    if role == "doctor":
-        doctor_username = username
-        # Validate patient is assigned
-        assigned = get_patients_for_doctor(doctor_username)
-        if patient_username not in assigned:
-            return jsonify({"status": "error", "message": "Patient not assigned to you"}), 403
-    elif role == "patient":
-        # Patient can only access their own room
-        if patient_username != username:
-            return jsonify({"status": "error", "message": "Not authorized"}), 403
-        doctor_username = get_doctor_for_patient(username)
-        if not doctor_username:
-            return jsonify({"status": "error", "message": "No doctor assigned"}), 404
-    else:
-        return jsonify({"status": "error", "message": "Not authorized"}), 403
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT username, specialization FROM user WHERE role = 'doctor' AND status = 'active' AND username != ?",
+            (username,),
+        ).fetchall()
+        doctors = [{"username": r["username"], "specialization": r["specialization"] or "General"} for r in rows]
+        return jsonify({"status": "ok", "doctors": doctors}), 200
+    finally:
+        conn.close()
 
-    doctor_id = _get_user_id(doctor_username)
-    patient_id = _get_user_id(patient_username)
-    if not doctor_id or not patient_id:
+
+# ---------------------------------------------------------------------------
+# GET /api/messages/rooms — doctor-to-doctor room list
+# ---------------------------------------------------------------------------
+
+@messaging_bp.get("/rooms")
+@require_auth
+@require_role("doctor")
+def list_rooms():
+    """Return all chat rooms where current doctor is either party (doctor-to-doctor)."""
+    username = g.current_user["username"]
+    user_id = _get_user_id(username)
+
+    conn = get_db()
+    try:
+        rooms = conn.execute(
+            """SELECT cr.room_id, cr.doctor_id, cr.patient_id, cr.last_message_at
+               FROM chat_room cr
+               WHERE cr.doctor_id = ? OR cr.patient_id = ?
+               ORDER BY cr.last_message_at DESC""",
+            (user_id, user_id),
+        ).fetchall()
+
+        result = []
+        for room in rooms:
+            room_dict = dict(room)
+            # Determine the other doctor's user_id
+            other_id = room_dict["patient_id"] if room_dict["doctor_id"] == user_id else room_dict["doctor_id"]
+            # Get other doctor's username
+            other_row = conn.execute("SELECT username, specialization FROM user WHERE user_id = ?", (other_id,)).fetchone()
+            if not other_row:
+                continue
+
+            # Get last message
+            last_msg = conn.execute(
+                "SELECT content, message_type, created_at FROM chat_message WHERE room_id = ? ORDER BY created_at DESC LIMIT 1",
+                (room_dict["room_id"],),
+            ).fetchone()
+            # Get unread count
+            unread = conn.execute(
+                "SELECT COUNT(*) as cnt FROM chat_message WHERE room_id = ? AND sender_username != ? AND read_at IS NULL",
+                (room_dict["room_id"], username),
+            ).fetchone()
+
+            result.append({
+                "room_id": room_dict["room_id"],
+                "other_doctor_username": other_row["username"],
+                "specialization": other_row["specialization"] or "General",
+                "last_message": last_msg["content"] if last_msg else None,
+                "last_message_type": last_msg["message_type"] if last_msg else None,
+                "last_message_at": last_msg["created_at"] if last_msg else room_dict["last_message_at"],
+                "unread_count": unread["cnt"] if unread else 0,
+            })
+
+        return jsonify({"status": "ok", "rooms": result}), 200
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# GET /api/messages/room/<other_doctor_username> — get/create room between two doctors
+# ---------------------------------------------------------------------------
+
+@messaging_bp.get("/room/<other_doctor_username>")
+@require_auth
+@require_role("doctor")
+def get_room(other_doctor_username: str):
+    """Get or create a chat room between two doctors and return last 50 messages."""
+    username = g.current_user["username"]
+
+    if username == other_doctor_username:
+        return jsonify({"status": "error", "message": "Cannot message yourself"}), 400
+
+    my_id = _get_user_id(username)
+    other_id = _get_user_id(other_doctor_username)
+
+    if not my_id or not other_id:
         return jsonify({"status": "error", "message": "User not found"}), 404
 
     conn = get_db()
     try:
-        # Get or create room
+        # Check if room exists (either direction)
         room = conn.execute(
-            "SELECT * FROM chat_room WHERE doctor_id = ? AND patient_id = ?",
-            (doctor_id, patient_id),
+            "SELECT * FROM chat_room WHERE (doctor_id = ? AND patient_id = ?) OR (doctor_id = ? AND patient_id = ?)",
+            (my_id, other_id, other_id, my_id),
         ).fetchone()
 
         if not room:
             cursor = conn.execute(
                 "INSERT INTO chat_room (doctor_id, patient_id) VALUES (?, ?)",
-                (doctor_id, patient_id),
+                (my_id, other_id),
             )
             conn.commit()
             room_id = cursor.lastrowid
         else:
             room_id = room["room_id"]
 
-        # Mark messages from other party as read
-        other_username = patient_username if role == "doctor" else doctor_username
+        # Mark messages from other doctor as read
         conn.execute(
             "UPDATE chat_message SET read_at = datetime('now') WHERE room_id = ? AND sender_username = ? AND read_at IS NULL",
-            (room_id, other_username),
+            (room_id, other_doctor_username),
         )
         conn.commit()
 
@@ -102,8 +167,7 @@ def get_room(patient_username: str):
         return jsonify({
             "status": "ok",
             "room_id": room_id,
-            "doctor_username": doctor_username,
-            "patient_username": patient_username,
+            "other_doctor_username": other_doctor_username,
             "messages": [dict(m) for m in messages],
         }), 200
     finally:
@@ -138,17 +202,17 @@ def send_message():
         if not room:
             return jsonify({"status": "error", "message": "Room not found"}), 404
 
-        # Get usernames for doctor and patient in this room
-        doctor_row = conn.execute("SELECT username FROM user WHERE user_id = ?", (room["doctor_id"],)).fetchone()
-        patient_row = conn.execute("SELECT username FROM user WHERE user_id = ?", (room["patient_id"],)).fetchone()
+        # Get usernames for both parties in this room
+        party1_row = conn.execute("SELECT username FROM user WHERE user_id = ?", (room["doctor_id"],)).fetchone()
+        party2_row = conn.execute("SELECT username FROM user WHERE user_id = ?", (room["patient_id"],)).fetchone()
 
-        if not doctor_row or not patient_row:
+        if not party1_row or not party2_row:
             return jsonify({"status": "error", "message": "Room users not found"}), 404
 
-        doctor_username = doctor_row["username"]
-        patient_username = patient_row["username"]
+        party1_username = party1_row["username"]
+        party2_username = party2_row["username"]
 
-        if username not in (doctor_username, patient_username):
+        if username not in (party1_username, party2_username):
             return jsonify({"status": "error", "message": "Not authorized"}), 403
 
         # Insert message
@@ -166,7 +230,7 @@ def send_message():
         msg_row = conn.execute("SELECT * FROM chat_message WHERE message_id = ?", (message_id,)).fetchone()
 
         # Notify recipient
-        recipient = patient_username if username == doctor_username else doctor_username
+        recipient = party2_username if username == party1_username else party1_username
         try:
             notify_user(recipient, 'new_message', {
                 'room_id': room_id,
@@ -193,75 +257,18 @@ def unread_count():
     """Return count of unread messages for current user."""
     username = g.current_user["username"]
     user_id = _get_user_id(username)
-    role = g.current_user["role"]
 
     conn = get_db()
     try:
-        if role == "doctor":
-            # Count unread messages in rooms where user is doctor, sent by patients
-            count = conn.execute(
-                """SELECT COUNT(*) as cnt FROM chat_message cm
-                   JOIN chat_room cr ON cr.room_id = cm.room_id
-                   WHERE cr.doctor_id = ? AND cm.sender_username != ? AND cm.read_at IS NULL""",
-                (user_id, username),
-            ).fetchone()
-        else:
-            # Count unread messages in rooms where user is patient, sent by doctors
-            count = conn.execute(
-                """SELECT COUNT(*) as cnt FROM chat_message cm
-                   JOIN chat_room cr ON cr.room_id = cm.room_id
-                   WHERE cr.patient_id = ? AND cm.sender_username != ? AND cm.read_at IS NULL""",
-                (user_id, username),
-            ).fetchone()
+        # Count unread messages in rooms where user is either party
+        count = conn.execute(
+            """SELECT COUNT(*) as cnt FROM chat_message cm
+               JOIN chat_room cr ON cr.room_id = cm.room_id
+               WHERE (cr.doctor_id = ? OR cr.patient_id = ?) AND cm.sender_username != ? AND cm.read_at IS NULL""",
+            (user_id, user_id, username),
+        ).fetchone()
 
         return jsonify({"status": "ok", "count": count["cnt"] if count else 0}), 200
-    finally:
-        conn.close()
-
-
-# ---------------------------------------------------------------------------
-# GET /api/messages/rooms — doctor's room list
-# ---------------------------------------------------------------------------
-
-@messaging_bp.get("/rooms")
-@require_auth
-@require_role("doctor")
-def list_rooms():
-    """Return all chat rooms for this doctor with last message and unread count."""
-    username = g.current_user["username"]
-    user_id = _get_user_id(username)
-
-    conn = get_db()
-    try:
-        rooms = conn.execute(
-            """SELECT cr.room_id, cr.last_message_at, u.username as patient_username
-               FROM chat_room cr
-               JOIN user u ON u.user_id = cr.patient_id
-               WHERE cr.doctor_id = ?
-               ORDER BY cr.last_message_at DESC""",
-            (user_id,),
-        ).fetchall()
-
-        result = []
-        for room in rooms:
-            room_dict = dict(room)
-            # Get last message
-            last_msg = conn.execute(
-                "SELECT content, created_at FROM chat_message WHERE room_id = ? ORDER BY created_at DESC LIMIT 1",
-                (room_dict["room_id"],),
-            ).fetchone()
-            # Get unread count
-            unread = conn.execute(
-                "SELECT COUNT(*) as cnt FROM chat_message WHERE room_id = ? AND sender_username != ? AND read_at IS NULL",
-                (room_dict["room_id"], username),
-            ).fetchone()
-
-            room_dict["last_message"] = last_msg["content"] if last_msg else None
-            room_dict["last_message_at"] = last_msg["created_at"] if last_msg else room_dict["last_message_at"]
-            room_dict["unread_count"] = unread["cnt"] if unread else 0
-            result.append(room_dict)
-
-        return jsonify({"status": "ok", "rooms": result}), 200
     finally:
         conn.close()
 

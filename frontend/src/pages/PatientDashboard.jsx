@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Home, FlaskConical, Table2, TrendingUp, Calendar, Pill, MessageCircle,
+  Home, FlaskConical, Table2, TrendingUp, Calendar, Pill,
   MessageSquare, BookOpen, FileText, Utensils, Stethoscope, Settings, LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +26,6 @@ import LanguageSelector from '../components/LanguageSelector.jsx';
 import AppointmentCalendar from '../components/AppointmentCalendar.jsx';
 import BookingModal from '../components/BookingModal.jsx';
 import MedicationTracker from '../components/MedicationTracker.jsx';
-import DoctorChat from '../components/DoctorChat.jsx';
 import Forum from '../components/Forum.jsx';
 import PostDetail from '../components/PostDetail.jsx';
 import CreatePost from '../components/CreatePost.jsx';
@@ -157,7 +156,6 @@ export default function PatientDashboard() {
     { id: 'progress', label: 'Progress', Icon: TrendingUp },
     { id: 'appointments', label: 'Appointments', Icon: Calendar, badge: pendingAppointments || badges.appointments },
     { id: 'medications', label: 'Medications', Icon: Pill, badge: badges.medications, badgeColor: '#f59e0b' },
-    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: unreadMessages || badges.messages },
     { id: 'forum', label: 'Forum', Icon: MessageSquare },
     { id: 'education', label: 'Education', Icon: BookOpen },
     { id: 'prescriptions', label: 'Prescriptions', Icon: FileText },
@@ -355,7 +353,6 @@ export default function PatientDashboard() {
             </>
           )}
           {view === 'medications' && <MedicationTracker />}
-          {view === 'messages' && <DoctorChat />}
           {view === 'forum' && (
             <div className="transition-all duration-200">
               {forumView === 'list' && (

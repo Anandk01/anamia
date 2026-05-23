@@ -552,6 +552,8 @@ def list_doctors():
 def forward_case():
     """Forward a patient case to another doctor by creating a pre-confirmed appointment.
 
+    Also inserts a 'case_forward' message in the chat room between the two doctors.
+
     Request JSON:
         {
             "patient_username": str,
@@ -564,6 +566,8 @@ def forward_case():
     Response JSON (201):
         {"status": "ok", "appointment": {...}}
     """
+    import json as _json
+
     data = request.get_json(silent=True) or {}
     patient_username = data.get("patient_username")
     target_doctor_id = data.get("target_doctor_id")
@@ -599,6 +603,44 @@ def forward_case():
     # Notify patient
     _notify_user(patient_username, "appointment", "Appointment Scheduled",
                  f"You have been referred to another doctor on {slot_date} at {slot_time}")
+
+    # --- Insert case_forward message in doctor-to-doctor chat room ---
+    from_id = _get_user_id(g.current_user["username"])
+    to_id = int(target_doctor_id)
+    forward_data = _json.dumps({
+        "patient_username": patient_username,
+        "slot_date": slot_date,
+        "slot_time": slot_time,
+        "notes": notes,
+        "forwarded_by": g.current_user["username"]
+    })
+
+    conn = get_db()
+    try:
+        room = conn.execute(
+            "SELECT room_id FROM chat_room WHERE (doctor_id=? AND patient_id=?) OR (doctor_id=? AND patient_id=?)",
+            (from_id, to_id, to_id, from_id),
+        ).fetchone()
+        if not room:
+            cursor2 = conn.execute(
+                "INSERT INTO chat_room (doctor_id, patient_id) VALUES (?, ?)",
+                (from_id, to_id),
+            )
+            room_id = cursor2.lastrowid
+        else:
+            room_id = room["room_id"]
+
+        conn.execute(
+            "INSERT INTO chat_message (room_id, sender_username, content, message_type) VALUES (?, ?, ?, 'case_forward')",
+            (room_id, g.current_user["username"], forward_data),
+        )
+        conn.execute(
+            "UPDATE chat_room SET last_message_at = datetime('now') WHERE room_id = ?",
+            (room_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
     return jsonify({"status": "ok", "appointment": dict(row)}), 201
 
