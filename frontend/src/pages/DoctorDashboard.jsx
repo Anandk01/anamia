@@ -187,7 +187,14 @@ export default function DoctorDashboard() {
           {NAV_ITEMS.map(({ id, label, Icon, badge, badgeColor }) => (
             <button
               key={id}
-              onClick={() => { setView(id); if (id !== 'forum') { setForumView('list'); setSelectedPost(null); } }}
+              onClick={() => {
+                setView(id);
+                if (id !== 'forum') { setForumView('list'); setSelectedPost(null); }
+                // Clear badge when section is viewed
+                if (id === 'messages') setBadges(b => ({ ...b, messages: 0 }));
+                if (id === 'schedule') setBadges(b => ({ ...b, appointments: 0 }));
+                if (id === 'alerts') setBadges(b => ({ ...b, alerts: 0 }));
+              }}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-all ${
                 view === id ? 'text-white bg-indigo-500/15 border-l-2 border-indigo-500' : 'text-slate-400 border-l-2 border-transparent hover:text-slate-200 hover:bg-slate-800'
               }`}
