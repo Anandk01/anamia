@@ -2,6 +2,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Prevent pull-to-refresh / overscroll bounce */
+html, body {
+  overscroll-behavior: none;
+}
+
 /* Theme: Dark mode support */
 .dark {
   color-scheme: dark;
