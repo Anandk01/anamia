@@ -26,6 +26,8 @@ export default function ProfileSettings() {
   const [emergencyName, setEmergencyName] = useState('');
   const [emergencyPhone, setEmergencyPhone] = useState('');
   const [emergencyRelation, setEmergencyRelation] = useState('');
+  const [age, setAge] = useState('');
+  const [sex, setSex] = useState('');
 
   // Notifications
   const [notifPrefs, setNotifPrefs] = useState({});
@@ -43,17 +45,19 @@ export default function ProfileSettings() {
   useEffect(() => {
     client.get('/api/profile')
       .then(res => {
-        const d = res.data;
+        const d = res.data?.profile || res.data || {};
         setBloodType(d.blood_type || '');
-        setConditions(d.conditions || []);
+        setConditions(d.known_conditions || d.conditions || []);
         setDietary(d.dietary_preferences || []);
         setEmergencyName(d.emergency_contact?.name || '');
         setEmergencyPhone(d.emergency_contact?.phone || '');
         setEmergencyRelation(d.emergency_contact?.relation || '');
-        setNotifPrefs(d.notification_preferences || {});
-        setFontSize(d.accessibility?.font_size || 'M');
-        setHighContrast(d.accessibility?.high_contrast || false);
-        setReducedMotion(d.accessibility?.reduced_motion || false);
+        setAge(d.age || '');
+        setSex(d.sex !== null && d.sex !== undefined ? String(d.sex) : '');
+        setNotifPrefs(d.notification_prefs || d.notification_preferences || {});
+        setFontSize(d.font_size || 'M');
+        setHighContrast(d.high_contrast || false);
+        setReducedMotion(d.reduced_motion || false);
       })
       .catch(() => {});
 
@@ -90,8 +94,10 @@ export default function ProfileSettings() {
     setSaving(true);
     try {
       await client.put('/api/profile', {
+        age: age ? parseInt(age) : null,
+        sex: sex !== '' ? parseInt(sex) : null,
         blood_type: bloodType,
-        conditions,
+        known_conditions: conditions,
         dietary_preferences: dietary,
         emergency_contact: { name: emergencyName, phone: emergencyPhone, relation: emergencyRelation },
       });
@@ -164,6 +170,23 @@ export default function ProfileSettings() {
       {/* Personal Info */}
       {tab === 'personal' && (
         <div className="bg-white rounded-lg border border-slate-200 p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Age</label>
+              <input type="number" value={age} onChange={e => setAge(e.target.value)} min="1" max="120" placeholder="Enter age" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Sex</label>
+              <div className="flex gap-3 mt-1">
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input type="radio" name="sex" value="0" checked={sex === '0'} onChange={e => setSex(e.target.value)} className="text-indigo-500 focus:ring-indigo-500" /> Male
+                </label>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input type="radio" name="sex" value="1" checked={sex === '1'} onChange={e => setSex(e.target.value)} className="text-indigo-500 focus:ring-indigo-500" /> Female
+                </label>
+              </div>
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Blood Type</label>
             <select value={bloodType} onChange={e => setBloodType(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">

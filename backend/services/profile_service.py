@@ -30,8 +30,9 @@ def get_profile(username):
             return None
         profile = dict(row)
         # Parse JSON fields
-        for field in ['available_hours', 'notification_prefs']:
-            if profile.get(field):
+        for field in ['available_hours', 'notification_prefs', 'known_conditions',
+                      'dietary_preferences', 'emergency_contact']:
+            if profile.get(field) and isinstance(profile[field], str):
                 try:
                     profile[field] = json.loads(profile[field])
                 except (json.JSONDecodeError, TypeError):
@@ -45,6 +46,8 @@ def update_health_profile(username, data):
     """Update health-related profile fields."""
     allowed = ['blood_type', 'known_conditions', 'dietary_preferences',
                'emergency_contact', 'vegan_diet', 'age', 'sex']
+    # Fields that should be stored as JSON strings
+    json_fields = ['known_conditions', 'dietary_preferences', 'emergency_contact']
     conn = get_db()
     try:
         updates = []
@@ -52,7 +55,11 @@ def update_health_profile(username, data):
         for key in allowed:
             if key in data:
                 updates.append(f"{key} = ?")
-                params.append(data[key])
+                value = data[key]
+                # Serialize lists/dicts to JSON for storage
+                if key in json_fields and isinstance(value, (list, dict)):
+                    value = json.dumps(value)
+                params.append(value)
 
         if not updates:
             return get_profile(username)

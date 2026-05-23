@@ -4,8 +4,11 @@ Profile Blueprint — /api/profile
 User profile management endpoints.
 """
 
+import json
+
 from flask import Blueprint, g, jsonify, request
 
+from db import get_db
 from middleware.auth import require_auth
 from middleware.rbac import require_role
 from services import profile_service
@@ -23,11 +26,50 @@ def get_profile():
     return jsonify({"status": "ok", "profile": profile}), 200
 
 
+@profile_bp.get("/<username>")
+@require_auth
+@require_role("doctor", "admin")
+def get_patient_profile(username):
+    """Get a patient's profile (doctor/admin only)."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT username, email, age, sex, blood_type, known_conditions, dietary_preferences, created_at FROM user WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        profile = dict(row)
+        # Parse JSON fields
+        for field in ['known_conditions', 'dietary_preferences']:
+            if profile.get(field) and isinstance(profile[field], str):
+                try:
+                    profile[field] = json.loads(profile[field])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return jsonify({"status": "ok", "profile": profile}), 200
+    finally:
+        conn.close()
+
+
 @profile_bp.put("/")
 @require_auth
 def update_profile():
     username = g.current_user["username"]
     data = request.get_json(silent=True) or {}
+
+    # Ensure age and sex are properly handled as integers
+    if 'age' in data and data['age'] is not None:
+        try:
+            data['age'] = int(data['age'])
+        except (ValueError, TypeError):
+            data['age'] = None
+    if 'sex' in data and data['sex'] is not None:
+        try:
+            data['sex'] = int(data['sex'])
+        except (ValueError, TypeError):
+            data['sex'] = None
+
     profile = profile_service.update_health_profile(username, data)
     return jsonify({"status": "ok", "profile": profile}), 200
 

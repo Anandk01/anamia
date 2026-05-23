@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import client from '../api/client';
 
 export default function PrescribeMedicationForm({ patientUsername, predictionId, onClose }) {
@@ -15,6 +15,37 @@ export default function PrescribeMedicationForm({ patientUsername, predictionId,
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  // Patient bio panel state
+  const [patientProfile, setPatientProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  // Debounced fetch of patient profile when patientUsername changes
+  useEffect(() => {
+    if (!patientUsername || patientUsername.length < 2) {
+      setPatientProfile(null);
+      setProfileError('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setProfileLoading(true);
+      setProfileError('');
+      client.get(`/api/profile/${patientUsername}`)
+        .then(res => {
+          setPatientProfile(res.data?.profile || null);
+          setProfileError('');
+        })
+        .catch(err => {
+          setPatientProfile(null);
+          if (err.response?.status === 404) {
+            setProfileError('Patient not found');
+          }
+        })
+        .finally(() => setProfileLoading(false));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [patientUsername]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -57,6 +88,25 @@ export default function PrescribeMedicationForm({ patientUsername, predictionId,
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <p className="text-sm text-slate-500">Prescribing for: <strong>{patientUsername}</strong></p>
+
+      {/* Patient Bio Panel */}
+      {profileLoading && <p className="text-xs text-slate-400 mt-1">Loading patient info...</p>}
+      {profileError && <p className="text-xs text-red-500 mt-1">{profileError}</p>}
+      {patientProfile && (
+        <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+          <p className="font-semibold text-slate-700">{patientProfile.username}</p>
+          <p className="text-slate-500">
+            Age: {patientProfile.age || '—'} | Sex: {patientProfile.sex === 1 ? 'Female' : patientProfile.sex === 0 ? 'Male' : '—'}
+          </p>
+          <p className="text-slate-500">Blood Type: {patientProfile.blood_type || '—'}</p>
+          {patientProfile.known_conditions && patientProfile.known_conditions.length > 0 && (
+            <p className="text-slate-500">Conditions: {Array.isArray(patientProfile.known_conditions) ? patientProfile.known_conditions.join(', ') : patientProfile.known_conditions}</p>
+          )}
+          {patientProfile.dietary_preferences && patientProfile.dietary_preferences.length > 0 && (
+            <p className="text-slate-500">Diet: {Array.isArray(patientProfile.dietary_preferences) ? patientProfile.dietary_preferences.join(', ') : patientProfile.dietary_preferences}</p>
+          )}
+        </div>
+      )}
 
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Medicine Name *</label>
