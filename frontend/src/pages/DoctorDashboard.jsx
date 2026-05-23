@@ -27,7 +27,6 @@ import Forum from '../components/Forum.jsx';
 import PostDetail from '../components/PostDetail.jsx';
 import CreatePost from '../components/CreatePost.jsx';
 import ArticleEditor from '../components/ArticleEditor.jsx';
-import PrescriptionForm from '../components/PrescriptionForm.jsx';
 import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
 import DoctorAvailability from '../components/DoctorAvailability.jsx';
 import PrescribeMedicationForm from '../components/PrescribeMedicationForm.jsx';
@@ -79,6 +78,7 @@ export default function DoctorDashboard() {
   const [quickStats, setQuickStats] = useState({});
   const [alerts, setAlerts] = useState([]);
   const [showPrescribeModal, setShowPrescribeModal] = useState(false);
+  const [prescribePatient, setPrescribePatient] = useState('');
   const [forwardModal, setForwardModal] = useState({ open: false, patientUsername: '' });
   const [forwardDoctors, setForwardDoctors] = useState([]);
   const [forwardForm, setForwardForm] = useState({ target_doctor_id: '', slot_date: '', slot_time: '10:00', notes: '' });
@@ -357,7 +357,23 @@ export default function DoctorDashboard() {
 
           {view === 'records' && <ReportHistory username={username} role="doctor" />}
           {view === 'schedule' && <DoctorSchedule />}
-          {view === 'prescribe' && <PrescriptionForm initialPatientUsername={patientUsername} />}
+          {view === 'prescribe' && (
+            <div className="max-w-lg">
+              <h2 className="text-lg font-semibold text-slate-800 mb-4">Prescribe Medication</h2>
+              <div className="bg-white rounded-lg border border-slate-200 p-5">
+                {!patientUsername && (
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Patient Username</label>
+                    <input type="text" value={prescribePatient} onChange={e => setPrescribePatient(e.target.value)} placeholder="Enter patient username" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                )}
+                <PrescribeMedicationForm
+                  patientUsername={patientUsername || prescribePatient}
+                  onClose={() => { setView('home'); setPrescribePatient(''); }}
+                />
+              </div>
+            </div>
+          )}
           {view === 'messages' && <DoctorChat />}
           {view === 'forum' && (
             <div className="transition-all duration-200">
