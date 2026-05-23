@@ -269,17 +269,15 @@ export default function DoctorDashboard() {
             <div className="flex gap-5">
               <div className="w-[420px] flex-shrink-0 bg-white rounded-lg border border-slate-200 p-4">
                 <div className="mb-4">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Select Patient</label>
-                  <select
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Patient Username</label>
+                  <input
+                    type="text"
                     value={patientUsername}
                     onChange={e => setPatientUsername(e.target.value)}
+                    placeholder="Enter patient username"
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">Select patient...</option>
-                    {assignedPatients.map(p => (
-                      <option key={p.username || p} value={p.username || p}>{p.username || p}</option>
-                    ))}
-                  </select>
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Type the patient's username to run assessment for them</p>
                 </div>
                 <CBCForm onSubmit={handleCBCSubmit} loading={loading} />
                 {error && <div className="mt-3 bg-red-50 border border-red-200 text-red-600 rounded px-3 py-2 text-sm">{error}</div>}

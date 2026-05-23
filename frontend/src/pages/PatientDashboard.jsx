@@ -80,7 +80,22 @@ export default function PatientDashboard() {
   const [quickStats, setQuickStats] = useState({});
 
   // Real-time badge counts from global socket
-  const { unreadMessages, pendingAppointments, activeAlerts } = useSocket() || {};
+  const { unreadMessages, pendingAppointments, activeAlerts, addListener, removeListener } = useSocket() || {};
+
+  // Counter to force re-render of progress view when new report arrives
+  const [progressKey, setProgressKey] = useState(0);
+
+  // Listen for new_report socket event to refresh HbTrendChart / progress view
+  useEffect(() => {
+    if (!addListener) return;
+    const handleNewReport = () => {
+      setProgressKey(prev => prev + 1);
+    };
+    addListener('new_report', handleNewReport);
+    return () => {
+      if (removeListener) removeListener('new_report', handleNewReport);
+    };
+  }, [addListener, removeListener]);
 
   // Booking modal state
   const [showBooking, setShowBooking] = useState(false);
@@ -219,7 +234,7 @@ export default function PatientDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white rounded-lg border border-slate-200 p-4">
                   <p className="text-xs font-semibold text-slate-500 uppercase mb-3">HGB Trend</p>
-                  <HbTrendChart username={username} compact />
+                  <HbTrendChart key={progressKey} username={username} compact />
                 </div>
                 <div className="bg-white rounded-lg border border-slate-200 p-4">
                   <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Today's Medications</p>
@@ -271,7 +286,7 @@ export default function PatientDashboard() {
           )}
 
           {view === 'history' && <ReportHistory username={username} role="patient" />}
-          {view === 'progress' && <HbTrendChart username={username} source="doctor" />}
+          {view === 'progress' && <HbTrendChart key={progressKey} username={username} source="doctor" />}
           {view === 'appointments' && (
             <>
               <div className="flex items-center justify-between mb-4">

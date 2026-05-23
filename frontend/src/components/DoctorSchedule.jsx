@@ -6,10 +6,17 @@ export default function DoctorSchedule({ compact }) {
   const [pending, setPending] = useState([]);
   const [confirmed, setConfirmed] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [rescheduleId, setRescheduleId] = useState(null);
+  const [declineId, setDeclineId] = useState(null);
+  const [rescheduleMode, setRescheduleMode] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
   const [reason, setReason] = useState('');
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchAppointments = async () => {
     try {
@@ -44,30 +51,79 @@ export default function DoctorSchedule({ compact }) {
   const handleAccept = async (appt) => {
     try {
       await client.put(`/api/appointments/${getId(appt)}/confirm`);
-      fetchAppointments();
+      // Optimistically move from pending to confirmed
+      setPending(prev => prev.filter(a => getId(a) !== getId(appt)));
+      setConfirmed(prev => [...prev, { ...appt, status: 'confirmed' }]);
+      showToast(`Appointment with ${getPatient(appt)} confirmed`);
     } catch (err) {
-      console.error('Accept failed', err);
+      const msg = err.response?.data?.message || 'Failed to accept appointment';
+      showToast(msg, 'error');
+      // Refetch to sync state
+      fetchAppointments();
     }
   };
 
-  const handleDecline = async (appt) => {
+  const handleReject = async (appt) => {
+    if (!reason.trim()) {
+      showToast('Please provide a reason for declining', 'error');
+      return;
+    }
     try {
-      await client.put(`/api/appointments/${getId(appt)}/cancel`, { reason: 'Declined by doctor' });
-      fetchAppointments();
+      await client.put(`/api/appointments/${getId(appt)}/cancel`, { reason: reason.trim() });
+      // Optimistically remove from pending
+      setPending(prev => prev.filter(a => getId(a) !== getId(appt)));
+      setDeclineId(null);
+      setReason('');
+      setRescheduleMode(false);
+      showToast(`Appointment with ${getPatient(appt)} declined`);
     } catch (err) {
-      console.error('Decline failed', err);
+      const msg = err.response?.data?.message || 'Failed to decline appointment';
+      showToast(msg, 'error');
+      fetchAppointments();
     }
   };
 
   const handleReschedule = async (appt) => {
-    if (!newDate || !newTime) return;
+    if (!newDate || !newTime) {
+      showToast('Please select a new date and time', 'error');
+      return;
+    }
     try {
-      await client.put(`/api/appointments/${getId(appt)}/reschedule`, { new_date: newDate, new_time: newTime, reason });
-      setRescheduleId(null);
-      setNewDate(''); setNewTime(''); setReason('');
+      await client.put(`/api/appointments/${getId(appt)}/reschedule`, {
+        new_date: newDate,
+        new_time: newTime,
+        reason: reason.trim() || 'Rescheduled by doctor',
+      });
+      // Optimistically remove from pending (new one will appear on next fetch)
+      setPending(prev => prev.filter(a => getId(a) !== getId(appt)));
+      setDeclineId(null);
+      setNewDate('');
+      setNewTime('');
+      setReason('');
+      setRescheduleMode(false);
+      showToast(`Appointment rescheduled to ${newDate} at ${newTime}`);
+      // Refetch to get the new appointment
       fetchAppointments();
     } catch (err) {
-      console.error('Reschedule failed', err);
+      const msg = err.response?.data?.message || 'Failed to reschedule appointment';
+      showToast(msg, 'error');
+      fetchAppointments();
+    }
+  };
+
+  const openDeclinePanel = (apptId) => {
+    if (declineId === apptId) {
+      setDeclineId(null);
+      setReason('');
+      setRescheduleMode(false);
+      setNewDate('');
+      setNewTime('');
+    } else {
+      setDeclineId(apptId);
+      setReason('');
+      setRescheduleMode(false);
+      setNewDate('');
+      setNewTime('');
     }
   };
 
@@ -94,7 +150,16 @@ export default function DoctorSchedule({ compact }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all ${
+          toast.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+        }`}>
+          {toast.message}
+        </div>
+      )}
+
       {/* Pending Requests */}
       <section>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -119,25 +184,65 @@ export default function DoctorSchedule({ compact }) {
                     <button onClick={() => handleAccept(appt)} className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200" title="Accept">
                       <Check size={18} />
                     </button>
-                    <button onClick={() => handleDecline(appt)} className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200" title="Decline">
+                    <button onClick={() => openDeclinePanel(getId(appt))} className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200" title="Decline / Reschedule">
                       <X size={18} />
-                    </button>
-                    <button onClick={() => setRescheduleId(rescheduleId === getId(appt) ? null : getId(appt))} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200" title="Reschedule">
-                      <RefreshCw size={18} />
                     </button>
                   </div>
                 </div>
-                {rescheduleId === getId(appt) && (
-                  <div className="mt-3 p-3 bg-white border border-blue-200 rounded-lg space-y-2">
-                    <p className="text-xs font-semibold text-blue-700 uppercase">Reschedule To</p>
-                    <div className="flex gap-2">
-                      <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="flex-1 rounded border border-slate-200 px-2 py-1.5 text-sm" />
-                      <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="w-28 rounded border border-slate-200 px-2 py-1.5 text-sm" />
+
+                {/* Decline / Reschedule Panel */}
+                {declineId === getId(appt) && (
+                  <div className="mt-3 p-3 bg-white border border-slate-200 rounded-lg space-y-3">
+                    <p className="text-xs font-semibold text-slate-600 uppercase">Decline or Reschedule</p>
+
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Reason</label>
+                      <textarea
+                        value={reason}
+                        onChange={e => setReason(e.target.value)}
+                        placeholder="Enter reason for declining or rescheduling..."
+                        className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm resize-none h-16"
+                      />
                     </div>
-                    <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" className="w-full rounded border border-slate-200 px-2 py-1.5 text-sm" />
-                    <button onClick={() => handleReschedule(appt)} className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded hover:bg-blue-600">
-                      Confirm Reschedule
-                    </button>
+
+                    {rescheduleMode && (
+                      <div className="space-y-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-xs font-semibold text-blue-700 uppercase">Reschedule To</p>
+                        <div className="flex gap-2">
+                          <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="flex-1 rounded border border-slate-200 px-2 py-1.5 text-sm" />
+                          <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="w-28 rounded border border-slate-200 px-2 py-1.5 text-sm" />
+                        </div>
+                        <button
+                          onClick={() => handleReschedule(appt)}
+                          className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded hover:bg-blue-600"
+                        >
+                          Confirm Reschedule
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleReject(appt)}
+                        className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded hover:bg-red-600"
+                      >
+                        Reject Appointment
+                      </button>
+                      {!rescheduleMode && (
+                        <button
+                          onClick={() => setRescheduleMode(true)}
+                          className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded hover:bg-blue-600 flex items-center gap-1"
+                        >
+                          <RefreshCw size={12} /> Reschedule to Different Date
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openDeclinePanel(null)}
+                        className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded hover:bg-slate-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
