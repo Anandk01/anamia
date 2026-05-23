@@ -19,23 +19,29 @@ export default function ArticleEditor({ onSaved }) {
     try {
       const payload = {
         title,
-        content,
+        content_md: content,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
       };
       const res = await client.post('/api/articles', payload);
-      const articleId = res.data.article?.id || res.data.id;
+      const article = res.data.article || res.data;
+      const articleId = article?.article_id || article?.id;
 
       if (publish && articleId) {
         const pubRes = await client.post(`/api/articles/${articleId}/publish`);
-        setSummary(pubRes.data.summary || '');
+        const pubArticle = pubRes.data.article || {};
+        setSummary(pubArticle.summary || '');
         setSuccess('Article published successfully!');
       } else {
         setSuccess('Draft saved successfully!');
       }
 
-      onSaved?.(res.data.article || res.data);
+      // Reset form on success
+      setTitle('');
+      setContent('');
+      setTags('');
+      onSaved?.(article);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save article');
+      setError(err.response?.data?.message || err.response?.data?.error || 'Failed to save article');
     } finally {
       setLoading(false);
     }
