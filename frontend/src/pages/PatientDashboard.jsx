@@ -11,6 +11,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth.js';
+import { useSocket } from '../contexts/SocketContext.jsx';
 import client from '../api/client.js';
 
 import CBCForm from '../components/CBCForm.jsx';
@@ -25,6 +26,7 @@ import LanguageSelector from '../components/LanguageSelector.jsx';
 import AppointmentCalendar from '../components/AppointmentCalendar.jsx';
 import BookingModal from '../components/BookingModal.jsx';
 import MedicationTracker from '../components/MedicationTracker.jsx';
+import DoctorChat from '../components/DoctorChat.jsx';
 import Forum from '../components/Forum.jsx';
 import PostDetail from '../components/PostDetail.jsx';
 import CreatePost from '../components/CreatePost.jsx';
@@ -77,6 +79,9 @@ export default function PatientDashboard() {
   const [badges, setBadges] = useState({});
   const [quickStats, setQuickStats] = useState({});
 
+  // Real-time badge counts from global socket
+  const { unreadMessages, pendingAppointments, activeAlerts } = useSocket() || {};
+
   // Booking modal state
   const [showBooking, setShowBooking] = useState(false);
   const [bookingSlot, setBookingSlot] = useState(null);
@@ -98,7 +103,6 @@ export default function PatientDashboard() {
       const list = r.data?.doctors || [];
       setDoctors(list.map(d => ({ id: d.id, name: d.name || d.username, specialization: d.specialization })));
     }).catch(() => {
-      // Fallback: try the admin endpoint (won't work for patients but handles edge cases)
       setDoctors([]);
     });
   }, []);
@@ -108,9 +112,9 @@ export default function PatientDashboard() {
     { id: 'test', label: 'New Test', Icon: FlaskConical },
     { id: 'history', label: 'History', Icon: Table2 },
     { id: 'progress', label: 'Progress', Icon: TrendingUp },
-    { id: 'appointments', label: 'Appointments', Icon: Calendar, badge: badges.appointments },
+    { id: 'appointments', label: 'Appointments', Icon: Calendar, badge: pendingAppointments || badges.appointments },
     { id: 'medications', label: 'Medications', Icon: Pill, badge: badges.medications, badgeColor: '#f59e0b' },
-    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: badges.messages },
+    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: unreadMessages || badges.messages },
     { id: 'forum', label: 'Forum', Icon: MessageSquare },
     { id: 'education', label: 'Education', Icon: BookOpen },
     { id: 'prescriptions', label: 'Prescriptions', Icon: FileText },
@@ -140,7 +144,7 @@ export default function PatientDashboard() {
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
       {/* Sidebar */}
-      <div className="flex flex-col flex-shrink-0 rounded-r-xl" style={{ width: '220px', backgroundColor: '#0f1117' }}>
+      <div className="flex flex-col flex-shrink-0" style={{ width: '220px', backgroundColor: '#0f1117' }}>
         <div className="px-5 py-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: '#6366f1' }}>A</div>
@@ -184,7 +188,7 @@ export default function PatientDashboard() {
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
         {/* Header */}
-        <div className="h-12 bg-gradient-to-r from-indigo-500 to-purple-600 border-b border-slate-200 flex items-center justify-between px-5 flex-shrink-0">
+        <div className="h-12 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-5 flex-shrink-0">
           <Breadcrumb items={['Dashboard', activeLabel]} />
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -271,7 +275,7 @@ export default function PatientDashboard() {
           {view === 'appointments' && (
             <>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-slate-800">Appointments</h2>
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Appointments</h2>
                 <button
                   onClick={() => setShowBooking(true)}
                   className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition"
@@ -290,12 +294,7 @@ export default function PatientDashboard() {
             </>
           )}
           {view === 'medications' && <MedicationTracker />}
-          {view === 'messages' && (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-2">
-              <MessageCircle size={32} className="opacity-30" />
-              <p>Use the chat button in the bottom-right corner</p>
-            </div>
-          )}
+          {view === 'messages' && <DoctorChat />}
           {view === 'forum' && (
             <div className="transition-all duration-200">
               {forumView === 'list' && (

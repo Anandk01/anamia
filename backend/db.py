@@ -289,6 +289,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
     ip_address TEXT,
     timestamp  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS doctor_availability (
+    availability_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_username      TEXT    NOT NULL REFERENCES user(username),
+    day_of_week          INTEGER NOT NULL,
+    start_time           TEXT    NOT NULL,
+    end_time             TEXT    NOT NULL,
+    slot_duration_minutes INTEGER NOT NULL DEFAULT 30
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -314,9 +323,22 @@ _ALTER_PRESCRIPTION_COLUMNS = [
     "ALTER TABLE prescription ADD COLUMN diet_plan TEXT",
 ]
 
+_ALTER_PREDICTION_COLUMNS = [
+    "ALTER TABLE prediction ADD COLUMN doctor_username TEXT",
+    "ALTER TABLE prediction ADD COLUMN clinical_notes TEXT",
+]
+
+_ALTER_MEDICATION_COLUMNS = [
+    "ALTER TABLE medication ADD COLUMN doctor_username TEXT",
+    "ALTER TABLE medication ADD COLUMN prediction_id INTEGER",
+    "ALTER TABLE medication ADD COLUMN dose_unit TEXT DEFAULT 'mg'",
+    "ALTER TABLE medication ADD COLUMN reminder_times TEXT",
+    "ALTER TABLE medication ADD COLUMN added_by TEXT DEFAULT 'doctor'",
+]
+
 
 def _extend_user_table(conn: sqlite3.Connection) -> None:
-    """Add new columns to the user table and prescription table if they don't already exist."""
+    """Add new columns to the user table, prediction table, and medication table if they don't already exist."""
     cursor = conn.cursor()
     for stmt in _ALTER_USER_COLUMNS:
         try:
@@ -327,6 +349,22 @@ def _extend_user_table(conn: sqlite3.Connection) -> None:
             else:
                 raise
     for stmt in _ALTER_PRESCRIPTION_COLUMNS:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass
+            else:
+                raise
+    for stmt in _ALTER_PREDICTION_COLUMNS:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass
+            else:
+                raise
+    for stmt in _ALTER_MEDICATION_COLUMNS:
         try:
             cursor.execute(stmt)
         except sqlite3.OperationalError as e:
@@ -462,5 +500,41 @@ def log_access_violation(
             (username, endpoint, role_claim, timestamp, ip_address, action),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Doctor-Patient Assignment helpers
+# ---------------------------------------------------------------------------
+
+def get_patients_for_doctor(doctor_username: str) -> list[str]:
+    """Returns list of patient usernames assigned to this doctor."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """SELECT u.username FROM doctor_patient dp
+               JOIN user u ON u.user_id = dp.patient_id
+               JOIN user d ON d.user_id = dp.doctor_id
+               WHERE d.username = ?""",
+            (doctor_username,)
+        ).fetchall()
+        return [r['username'] for r in rows]
+    finally:
+        conn.close()
+
+
+def get_doctor_for_patient(patient_username: str) -> str | None:
+    """Returns the doctor username assigned to this patient, or None."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """SELECT d.username FROM doctor_patient dp
+               JOIN user d ON d.user_id = dp.doctor_id
+               JOIN user p ON p.user_id = dp.patient_id
+               WHERE p.username = ?""",
+            (patient_username,)
+        ).fetchone()
+        return row['username'] if row else None
     finally:
         conn.close()

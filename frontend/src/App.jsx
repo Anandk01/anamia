@@ -5,7 +5,9 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth.js';
+import { SocketProvider } from './contexts/SocketContext.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
@@ -44,44 +46,56 @@ function RoleRedirect() {
 }
 
 export default function App() {
+  const { getUser, isAuthenticated } = useAuth();
+  const [user, setUser] = useState(() => (isAuthenticated() ? getUser() : null));
+
+  // Re-check user on storage changes (login/logout in another tab)
+  useEffect(() => {
+    const onStorage = () => setUser(isAuthenticated() ? getUser() : null);
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+    <SocketProvider user={user}>
+      <BrowserRouter>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-        {/* Role-based protected routes */}
-        <Route
-          path="/patient/*"
-          element={
-            <PrivateRoute allowedRoles={['patient']}>
-              <PatientDashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/doctor/*"
-          element={
-            <PrivateRoute allowedRoles={['doctor']}>
-              <DoctorDashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/admin/*"
-          element={
-            <PrivateRoute allowedRoles={['admin']}>
-              <AdminDashboard />
-            </PrivateRoute>
-          }
-        />
+          {/* Role-based protected routes */}
+          <Route
+            path="/patient/*"
+            element={
+              <PrivateRoute allowedRoles={['patient']}>
+                <PatientDashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/doctor/*"
+            element={
+              <PrivateRoute allowedRoles={['doctor']}>
+                <DoctorDashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/*"
+            element={
+              <PrivateRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </PrivateRoute>
+            }
+          />
 
-        {/* Root redirect */}
-        <Route path="/" element={<RoleRedirect />} />
-        <Route path="*" element={<RoleRedirect />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Root redirect */}
+          <Route path="/" element={<RoleRedirect />} />
+          <Route path="*" element={<RoleRedirect />} />
+        </Routes>
+      </BrowserRouter>
+    </SocketProvider>
   );
 }

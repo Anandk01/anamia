@@ -108,11 +108,13 @@ def create_app() -> Flask:
         alerts_bp,
         analytics_bp,
         appointments_bp,
+        assignment_bp,
         auth_bp,
         chat_bp,
         education_bp,
         forum_bp,
         medication_bp,
+        messaging_bp,
         notifications_bp,
         ocr_bp,
         predict_bp,
@@ -138,6 +140,8 @@ def create_app() -> Flask:
     app.register_blueprint(prescriptions_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(profile_bp)
+    app.register_blueprint(assignment_bp)
+    app.register_blueprint(messaging_bp)
 
     # ── Flask-SocketIO (optional) ─────────────────────────────────────────────
     try:
@@ -191,4 +195,8 @@ def create_app() -> Flask:
 # ─── Development entry point ──────────────────────────────────────────────────
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True)
+    socketio = app.config.get('SOCKETIO')
+    if socketio:
+        socketio.run(app, debug=True)
+    else:
+        app.run(debug=True)

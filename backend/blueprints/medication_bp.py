@@ -16,10 +16,11 @@ Routes:
 
 from flask import Blueprint, g, jsonify, request
 
-from db import get_db
+from db import get_db, get_doctor_for_patient, get_patients_for_doctor
 from middleware.auth import require_auth
 from middleware.rbac import require_role
 from services import medication_service
+from utils import notify_user
 
 medication_bp = Blueprint("medications", __name__, url_prefix="/api/medications")
 
@@ -83,6 +84,87 @@ def prescribe_medication():
         return jsonify({"status": "error", "message": str(e)}), 400
 
     return jsonify({"status": "ok", "medication": medication}), 201
+
+
+# ---------------------------------------------------------------------------
+# POST /api/medications/prescribe — doctor prescribes with full details
+# ---------------------------------------------------------------------------
+
+@medication_bp.post("/prescribe")
+@require_auth
+@require_role("doctor")
+def prescribe_medication_full():
+    """Doctor prescribes medication linked to a patient with extended fields.
+
+    Request JSON:
+        {
+            "patient_username": str,
+            "name": str,
+            "dose_mg": float,
+            "dose_unit": str (optional, default 'mg'),
+            "frequency": str,
+            "reminder_times": list (optional, e.g. ["08:00", "20:00"]),
+            "start_date": str,
+            "end_date": str (optional),
+            "notes": str (optional),
+            "prediction_id": int (optional)
+        }
+    """
+    import json as _json
+
+    data = request.get_json(silent=True) or {}
+    doctor_username = g.current_user["username"]
+    patient_username = data.get("patient_username")
+    name = data.get("name")
+    dose_mg = data.get("dose_mg")
+    dose_unit = data.get("dose_unit", "mg")
+    frequency = data.get("frequency")
+    reminder_times = data.get("reminder_times")
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+    notes = data.get("notes")
+    prediction_id = data.get("prediction_id")
+
+    if not patient_username or not name or dose_mg is None or not frequency or not start_date:
+        return jsonify({"status": "error", "message": "patient_username, name, dose_mg, frequency, and start_date are required"}), 400
+
+    # Validate assignment
+    assigned_patients = get_patients_for_doctor(doctor_username)
+    if patient_username not in assigned_patients:
+        return jsonify({"status": "error", "message": "Patient is not assigned to you"}), 403
+
+    reminder_times_json = _json.dumps(reminder_times) if reminder_times else None
+
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            """INSERT INTO medication (username, name, dose_mg, frequency, start_date, end_date,
+                prescribed_by, active, created_at, doctor_username, prediction_id, dose_unit, reminder_times, added_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), ?, ?, ?, ?, 'doctor')""",
+            (patient_username, name, float(dose_mg), frequency, start_date, end_date,
+             doctor_username, doctor_username, prediction_id, dose_unit, reminder_times_json),
+        )
+        conn.commit()
+        med_id = cursor.lastrowid
+        row = conn.execute("SELECT * FROM medication WHERE med_id = ?", (med_id,)).fetchone()
+    finally:
+        conn.close()
+
+    # Notify patient
+    try:
+        notify_user(patient_username, 'new_prescription', {
+            'med_id': med_id,
+            'doctor_username': doctor_username,
+            'name': name,
+            'dose_mg': float(dose_mg),
+            'dose_unit': dose_unit,
+            'frequency': frequency,
+            'start_date': start_date,
+        })
+    except Exception:
+        pass
+
+    return jsonify({"status": "ok", "medication": dict(row)}), 201
 
 
 # ---------------------------------------------------------------------------

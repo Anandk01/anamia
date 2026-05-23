@@ -20,6 +20,8 @@ from .notifications_bp import notifications_bp
 from .prescriptions_bp import prescriptions_bp
 from .analytics_bp import analytics_bp
 from .profile_bp import profile_bp
+from .assignment_bp import assignment_bp
+from .messaging_bp import messaging_bp
 
 __all__ = [
     'auth_bp',
@@ -38,4 +40,6 @@ __all__ = [
     'prescriptions_bp',
     'analytics_bp',
     'profile_bp',
+    'assignment_bp',
+    'messaging_bp',
 ]
