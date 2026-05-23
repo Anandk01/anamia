@@ -549,6 +549,42 @@ def mark_attended(appointment_id: int):
 
 
 # ---------------------------------------------------------------------------
+# GET /api/appointments/doctor-schedule/<doctor_id> — get doctor's weekly schedule
+# ---------------------------------------------------------------------------
+
+@appointments_bp.get("/doctor-schedule/<int:doctor_id>")
+@require_auth
+def get_doctor_schedule(doctor_id):
+    """Return doctor's weekly availability schedule from available_hours JSON column.
+
+    Response JSON (200):
+        {"status": "ok", "schedule": {...}, "available_days": ["mon", "tue", ...]}
+    """
+    import json as _json
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT available_hours FROM user WHERE user_id = ? AND role = 'doctor'",
+            (doctor_id,),
+        ).fetchone()
+        if not row or not row["available_hours"]:
+            return jsonify({"status": "ok", "schedule": {}, "available_days": []}), 200
+
+        hours = _json.loads(row["available_hours"])
+        available_days = [
+            k for k, v in hours.items()
+            if k != "_max_patients_per_day" and isinstance(v, dict)
+        ]
+        return jsonify({
+            "status": "ok",
+            "schedule": hours,
+            "available_days": available_days,
+        }), 200
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # GET /api/appointments/available-slots — patient views available slots
 # ---------------------------------------------------------------------------
 

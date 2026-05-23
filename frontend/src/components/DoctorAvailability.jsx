@@ -13,6 +13,7 @@ const defaultSchedule = DAYS.map(day => ({
 
 export default function DoctorAvailability() {
   const [schedule, setSchedule] = useState(defaultSchedule);
+  const [maxPatients, setMaxPatients] = useState(10);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -21,6 +22,9 @@ export default function DoctorAvailability() {
       .then(res => {
         if (res.data?.schedule && res.data.schedule.length > 0) {
           setSchedule(res.data.schedule);
+        }
+        if (res.data?.max_patients_per_day) {
+          setMaxPatients(res.data.max_patients_per_day);
         }
       })
       .catch(() => {});
@@ -33,7 +37,10 @@ export default function DoctorAvailability() {
   async function handleSave() {
     setSaving(true);
     try {
-      await client.put('/api/profile/available-hours', { schedule });
+      await client.put('/api/profile/available-hours', {
+        schedule,
+        max_patients_per_day: maxPatients,
+      });
       setMessage('Schedule saved');
     } catch {
       setMessage('Failed to save');
@@ -99,6 +106,18 @@ export default function DoctorAvailability() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium text-slate-700">Max Patients Per Day:</label>
+        <input
+          type="number"
+          value={maxPatients}
+          onChange={e => setMaxPatients(parseInt(e.target.value) || 10)}
+          min="1"
+          max="50"
+          className="w-20 rounded border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
       </div>
 
       <button

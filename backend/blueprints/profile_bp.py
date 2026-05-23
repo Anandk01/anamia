@@ -105,11 +105,85 @@ def change_password():
 def update_available_hours():
     username = g.current_user["username"]
     data = request.get_json(silent=True) or {}
-    hours = data.get("hours")
-    if not hours:
-        return jsonify({"status": "error", "message": "hours field required"}), 400
-    profile = profile_service.update_available_hours(username, hours)
-    return jsonify({"status": "ok", "profile": profile}), 200
+    schedule = data.get("schedule") or data.get("hours")
+
+    if not schedule:
+        return jsonify({"status": "error", "message": "schedule required"}), 400
+
+    # Convert array format to dict format for slot generation
+    day_map = {
+        "Monday": "mon", "Tuesday": "tue", "Wednesday": "wed",
+        "Thursday": "thu", "Friday": "fri", "Saturday": "sat", "Sunday": "sun"
+    }
+    hours_dict = {}
+    max_patients = data.get("max_patients_per_day", 10)
+
+    if isinstance(schedule, list):
+        for item in schedule:
+            if item.get("available"):
+                key = day_map.get(item["day"], item["day"][:3].lower())
+                hours_dict[key] = {"start": item["start"], "end": item["end"]}
+    elif isinstance(schedule, dict):
+        hours_dict = schedule
+
+    hours_dict["_max_patients_per_day"] = max_patients
+
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE user SET available_hours = ? WHERE username = ?",
+            (json.dumps(hours_dict), username),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"status": "ok", "saved": True}), 200
+
+
+@profile_bp.get("/available-hours")
+@require_auth
+def get_available_hours():
+    """Return the current user's available hours schedule in array format."""
+    username = g.current_user["username"]
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT available_hours FROM user WHERE username = ?", (username,)
+        ).fetchone()
+        if not row or not row["available_hours"]:
+            return jsonify({"status": "ok", "schedule": [], "max_patients_per_day": 10}), 200
+
+        hours = json.loads(row["available_hours"])
+        max_patients = hours.get("_max_patients_per_day", 10)
+
+        # Convert dict format back to array format for the frontend
+        day_map_reverse = {
+            "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday",
+            "thu": "Thursday", "fri": "Friday", "sat": "Saturday", "sun": "Sunday"
+        }
+        days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        schedule = []
+        for day in days_order:
+            key = day[:3].lower()
+            if key in hours and isinstance(hours[key], dict):
+                schedule.append({
+                    "day": day,
+                    "available": True,
+                    "start": hours[key].get("start", "09:00"),
+                    "end": hours[key].get("end", "17:00"),
+                })
+            else:
+                schedule.append({
+                    "day": day,
+                    "available": False,
+                    "start": "09:00",
+                    "end": "17:00",
+                })
+
+        return jsonify({"status": "ok", "schedule": schedule, "max_patients_per_day": max_patients}), 200
+    finally:
+        conn.close()
 
 
 # ---------------------------------------------------------------------------

@@ -550,6 +550,17 @@ def get_available_slots(doctor_id: int, date_str: str) -> list[dict]:
                 if slot_start <= now_minutes:
                     slot["available"] = False
 
+        # Check max patients per day — if booked count >= max, mark all as unavailable
+        max_patients = available_hours.get("_max_patients_per_day", 10)
+        booked_count = conn.execute(
+            "SELECT COUNT(*) FROM appointment WHERE doctor_id = ? AND slot_date = ? AND status IN ('confirmed', 'pending')",
+            (doctor_id, date_str),
+        ).fetchone()[0]
+
+        if booked_count >= max_patients:
+            for slot in slots:
+                slot["available"] = False
+
         return slots
     finally:
         conn.close()
