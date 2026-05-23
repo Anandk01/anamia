@@ -28,6 +28,33 @@ export default function PrescriptionView() {
     } catch {}
   }
 
+  function printPrescription(rx) {
+    const meds = (rx.medications || []).map(m => `${m.name} - ${m.dose} - ${m.frequency} - ${m.duration}`).join('\n');
+    const content = `
+      <html><head><title>Prescription</title>
+      <style>body{font-family:Arial,sans-serif;padding:40px;} h1{color:#4f46e5;} table{width:100%;border-collapse:collapse;margin:20px 0;} th,td{border:1px solid #ddd;padding:8px;text-align:left;} th{background:#f1f5f9;} .footer{margin-top:30px;font-size:12px;color:#666;border-top:1px solid #ddd;padding-top:10px;}</style>
+      </head><body>
+      <h1>AnemiaCare Prescription</h1>
+      <p><strong>Doctor:</strong> Dr. ${rx.doctor_name || rx.doctor_username || rx.doctor_id}</p>
+      <p><strong>Date:</strong> ${new Date(rx.created_at).toLocaleDateString()}</p>
+      <hr/>
+      <h3>Medications</h3>
+      <table><thead><tr><th>Medicine</th><th>Dose</th><th>Frequency</th><th>Duration</th></tr></thead><tbody>
+      ${(rx.medications || []).map(m => `<tr><td>${m.name}</td><td>${m.dose}</td><td>${m.frequency}</td><td>${m.duration}</td></tr>`).join('')}
+      </tbody></table>
+      ${rx.dosage_instructions ? `<p><strong>Instructions:</strong> ${rx.dosage_instructions}</p>` : ''}
+      ${rx.diet_plan ? `<p><strong>Diet Plan:</strong> ${rx.diet_plan}</p>` : ''}
+      ${rx.notes ? `<p><strong>Notes:</strong> ${rx.notes}</p>` : ''}
+      ${rx.follow_up_date ? `<p><strong>Follow-up Date:</strong> ${rx.follow_up_date}</p>` : ''}
+      <div class="footer"><p>This is a computer-generated prescription from AnemiaCare.</p><p>Not a substitute for professional medical advice.</p></div>
+      </body></html>
+    `;
+    const win = window.open('', '_blank');
+    win.document.write(content);
+    win.document.close();
+    win.print();
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-slate-800">My Prescriptions</h2>
@@ -91,12 +118,29 @@ export default function PrescriptionView() {
                 </div>
               )}
               {rx.notes && <p className="text-xs text-slate-500 italic">{rx.notes}</p>}
-              <button
-                onClick={() => downloadPdf(rx.id)}
-                className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium hover:text-indigo-800"
-              >
-                <Download size={12} /> Download PDF
-              </button>
+              {rx.dosage_instructions && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-blue-700 uppercase mb-1">Dosage Instructions</p>
+                  <p className="text-sm text-blue-800 whitespace-pre-wrap">{rx.dosage_instructions}</p>
+                </div>
+              )}
+              {rx.follow_up_date && (
+                <p className="text-xs text-slate-600">📅 Follow-up: <span className="font-medium">{rx.follow_up_date}</span></p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => downloadPdf(rx.id)}
+                  className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium hover:text-indigo-800"
+                >
+                  <Download size={12} /> Download PDF
+                </button>
+                <button
+                  onClick={() => printPrescription(rx)}
+                  className="flex items-center gap-1.5 text-xs text-slate-600 font-medium hover:text-slate-800"
+                >
+                  🖨️ Print
+                </button>
+              </div>
             </div>
           )}
         </div>

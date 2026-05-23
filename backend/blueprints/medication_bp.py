@@ -159,6 +159,23 @@ def prescribe_medication_full():
     except Exception:
         pass
 
+    # Also create a prescription record so it shows in patient's Prescriptions page
+    try:
+        import json as _json2
+        meds_list = [{"name": name, "dose": f"{dose_mg}{dose_unit}", "frequency": frequency, "duration": end_date or "ongoing"}]
+        conn2 = get_db()
+        try:
+            conn2.execute(
+                """INSERT INTO prescription (doctor_id, patient_id, prediction_id, medications, dosage_instructions, notes, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+                (doctor_username, patient_username, prediction_id, _json2.dumps(meds_list), notes or '', notes or ''),
+            )
+            conn2.commit()
+        finally:
+            conn2.close()
+    except Exception:
+        pass
+
     return jsonify({"status": "ok", "medication": dict(row)}), 201
 
 
