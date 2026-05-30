@@ -22,7 +22,29 @@ def overview():
     if g.current_user["role"] == "doctor":
         doctor_username = g.current_user["username"]
     metrics = analytics_service.get_overview_metrics(doctor_username=doctor_username)
-    return jsonify({"status": "ok", "metrics": metrics}), 200
+
+    # Also include severity and type distributions for the AnalyticsDashboard component
+    conn = get_db()
+    try:
+        severity_dist = {}
+        for row in conn.execute("SELECT severity_level, COUNT(*) as cnt FROM prediction GROUP BY severity_level").fetchall():
+            severity_dist[row["severity_level"]] = row["cnt"]
+
+        type_dist = {}
+        for row in conn.execute("SELECT anemia_type, COUNT(*) as cnt FROM prediction GROUP BY anemia_type").fetchall():
+            type_dist[row["anemia_type"]] = row["cnt"]
+    finally:
+        conn.close()
+
+    return jsonify({
+        "status": "ok",
+        "metrics": metrics,
+        "total_patients": metrics.get("total_patients", 0),
+        "total_predictions": metrics.get("total_predictions", 0),
+        "total_appointments": metrics.get("total_appointments", 0),
+        "severity_distribution": severity_dist,
+        "type_distribution": type_dist,
+    }), 200
 
 
 @analytics_bp.get("/trends")

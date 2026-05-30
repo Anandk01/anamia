@@ -341,6 +341,10 @@ _ALTER_APPOINTMENT_COLUMNS = [
     "ALTER TABLE appointment ADD COLUMN attended INTEGER",
 ]
 
+_ALTER_ALERT_LOG_COLUMNS = [
+    "ALTER TABLE alert_log ADD COLUMN read INTEGER DEFAULT 0",
+]
+
 
 def _extend_user_table(conn: sqlite3.Connection) -> None:
     """Add new columns to the user table, prediction table, and medication table if they don't already exist."""
@@ -378,6 +382,14 @@ def _extend_user_table(conn: sqlite3.Connection) -> None:
             else:
                 raise
     for stmt in _ALTER_APPOINTMENT_COLUMNS:
+        try:
+            cursor.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                pass
+            else:
+                raise
+    for stmt in _ALTER_ALERT_LOG_COLUMNS:
         try:
             cursor.execute(stmt)
         except sqlite3.OperationalError as e:

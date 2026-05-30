@@ -38,9 +38,8 @@ export default function PrescribeMedicationForm({ patientUsername, predictionId,
         })
         .catch(err => {
           setPatientProfile(null);
-          if (err.response?.status === 404) {
-            setProfileError('Patient not found');
-          }
+          // Don't show error — patient may exist but not have profile filled yet
+          setProfileError('');
         })
         .finally(() => setProfileLoading(false));
     }, 500);

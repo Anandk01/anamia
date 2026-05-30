@@ -1,13 +1,12 @@
 /**
  * AdminDashboard.jsx
- * Full-featured admin dashboard with 12 nav items, system health indicators, and rich overview.
+ * Admin dashboard with system health, user management, and analytics.
  */
 
 import { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Users, Brain, BarChart3, GitCompare, RefreshCw,
-  Bell, FileText, MessageSquare, BookOpen, Activity, Settings,
-  LogOut, Plus, X, CheckCircle, XCircle, Loader2, UserPlus,
+  Home, Users, RefreshCw, Bell, Layers, Calendar, Server,
+  LogOut, Plus, X, CheckCircle, XCircle, Loader2, BarChart3, Settings,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,11 +19,8 @@ import client from '../api/client.js';
 import AlertLog from '../components/AlertLog.jsx';
 import RetrainingPanel from '../components/RetrainingPanel.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
-import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
 import ModelComparison from '../components/ModelComparison.jsx';
-import Forum from '../components/Forum.jsx';
-import ArticleEditor from '../components/ArticleEditor.jsx';
-import AssignmentPanel from '../components/AssignmentPanel.jsx';
+import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
 import ProfileSettings from '../components/ProfileSettings.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
@@ -44,7 +40,7 @@ function StatCard({ label, value, sub, color }) {
   return (
     <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 shadow-md hover:scale-[1.02] transition-transform">
       <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-2xl font-bold" style={{ color: color || '#1e293b' }}>{value ?? '—'}</p>
+      <p className="text-2xl font-bold" style={{ color: color || '#1e293b' }}>{value ?? 0}</p>
       {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
   );
@@ -85,7 +81,7 @@ function AdminScheduleAppointment() {
   }
 
   return (
-    <div className="max-w-lg">
+    <div>
       <h2 className="text-lg font-semibold text-slate-800 mb-4">Schedule Appointment</h2>
       <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-md">
         <div>
@@ -137,7 +133,6 @@ export default function AdminDashboard() {
   const [createError, setCreateError] = useState(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [badges, setBadges] = useState({});
-  const [auditLog, setAuditLog] = useState([]);
 
   useEffect(() => {
     client.get('/health').then(res => {
@@ -148,8 +143,23 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (view === 'overview') {
-      client.get('/api/stats').then(res => setStats(res.data)).catch(() => {});
-      client.get('/api/audit-log', { params: { limit: 5 } }).then(res => setAuditLog(res.data?.logs || [])).catch(() => {});
+      client.get('/api/stats').then(res => {
+        const s = res.data?.stats || res.data || {};
+        // Map backend field names to what the overview expects
+        setStats({
+          total_predictions: s.total_predictions || 0,
+          total_users: (s.users_by_role?.patient || 0) + (s.users_by_role?.doctor || 0) + (s.users_by_role?.admin || 0),
+          anemia_cases: Object.entries(s.predictions_by_severity || {}).filter(([k]) => k !== 'None').reduce((sum, [, v]) => sum + v, 0),
+          severe_cases: s.predictions_by_severity?.Severe || 0,
+          alerts_sent: s.total_alerts_sent || 0,
+          retrain_count: s.retrain_count || 0,
+          active_doctors: s.users_by_role?.doctor || 0,
+          avg_adherence: s.avg_adherence || null,
+          severity_distribution: s.predictions_by_severity || {},
+          type_distribution: s.predictions_by_type || {},
+          daily_predictions: s.predictions_per_day || [],
+        });
+      }).catch(() => setStats({}));
     }
   }, [view]);
 
@@ -164,19 +174,14 @@ export default function AdminDashboard() {
   }, []);
 
   const NAV_ITEMS = [
-    { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
+    { id: 'overview', label: 'Overview', Icon: Home },
     { id: 'users', label: 'Users', Icon: Users },
-    { id: 'assignments', label: 'Assignments', Icon: UserPlus },
-    { id: 'schedule', label: 'Schedule Appt', Icon: Activity },
-    { id: 'predictions', label: 'Predictions', Icon: Brain },
+    { id: 'schedule', label: 'Schedule Appt', Icon: Calendar },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
-    { id: 'comparison', label: 'Model Comparison', Icon: GitCompare },
-    { id: 'retraining', label: 'Retraining', Icon: RefreshCw },
     { id: 'alertlog', label: 'Alert Log', Icon: Bell, badge: badges.alerts, badgeColor: '#ef4444' },
-    { id: 'auditlog', label: 'Audit Log', Icon: FileText },
-    { id: 'forum', label: 'Forum Moderation', Icon: MessageSquare },
-    { id: 'articles', label: 'Articles', Icon: BookOpen },
-    { id: 'health', label: 'System Health', Icon: Activity },
+    { id: 'comparison', label: 'Model Comparison', Icon: Layers },
+    { id: 'retraining', label: 'Retraining', Icon: RefreshCw },
+    { id: 'health', label: 'System Health', Icon: Server },
     { id: 'settings', label: 'Settings', Icon: Settings },
   ];
 
@@ -276,14 +281,14 @@ export default function AdminDashboard() {
             <div className="space-y-5">
               {/* 8 stat cards in 2 rows */}
               <div className="grid grid-cols-4 gap-4">
-                <StatCard label="Total Predictions" value={stats?.total_predictions} />
-                <StatCard label="Total Users" value={stats?.total_users} />
-                <StatCard label="Anemia Cases" value={stats?.anemia_cases} color="#ef4444" />
-                <StatCard label="Severe Cases" value={stats?.severe_cases} color="#ef4444" sub="HGB < 8.0" />
-                <StatCard label="Alerts Sent" value={stats?.alerts_sent} />
-                <StatCard label="Retraining Runs" value={stats?.retrain_count} />
-                <StatCard label="Active Doctors" value={stats?.active_doctors || '—'} color="#6366f1" />
-                <StatCard label="Avg Adherence" value={stats?.avg_adherence ? `${stats.avg_adherence}%` : '—'} color="#10b981" />
+                <StatCard label="Total Predictions" value={stats?.total_predictions ?? 0} />
+                <StatCard label="Total Users" value={stats?.total_users ?? 0} />
+                <StatCard label="Anemia Cases" value={stats?.anemia_cases ?? 0} color="#ef4444" />
+                <StatCard label="Severe Cases" value={stats?.severe_cases ?? 0} color="#ef4444" sub="HGB < 8.0" />
+                <StatCard label="Alerts Sent" value={stats?.alerts_sent ?? 0} />
+                <StatCard label="Retraining Runs" value={stats?.retrain_count ?? 0} />
+                <StatCard label="Active Doctors" value={stats?.active_doctors ?? 0} color="#6366f1" />
+                <StatCard label="Avg Adherence" value={stats?.avg_adherence ? `${stats.avg_adherence}%` : '0%'} color="#10b981" />
               </div>
 
               {/* Full-width area chart */}
@@ -347,21 +352,6 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              {/* Recent Audit Log */}
-              <div className="bg-white rounded-lg border border-slate-200 p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Recent Audit Log</p>
-                {auditLog.length === 0 && <p className="text-sm text-slate-400">No recent activity</p>}
-                <div className="space-y-2">
-                  {auditLog.map((log, idx) => (
-                    <div key={idx} className="flex items-center gap-3 text-sm py-1.5 border-b border-slate-50 last:border-0">
-                      <span className="text-xs text-slate-400 w-32 flex-shrink-0">{log.timestamp || log.created_at}</span>
-                      <span className="text-slate-700 font-medium">{log.action}</span>
-                      <span className="text-slate-500 text-xs">{log.username || log.user}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* System Health */}
               <div className="bg-white rounded-lg border border-slate-200 p-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase mb-3">System Health</p>
@@ -409,34 +399,37 @@ export default function AdminDashboard() {
                 </table>
               </div>
 
+              {/* Create User Modal — centered overlay */}
               {showCreatePanel && (
                 <>
-                  <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setShowCreatePanel(false)} />
-                  <div className="fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 flex flex-col">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                      <h3 className="font-semibold text-slate-800">Create User</h3>
-                      <button onClick={() => setShowCreatePanel(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
-                    </div>
-                    <form onSubmit={handleCreateUser} className="flex-1 p-5 space-y-4">
-                      {[{ name: 'username', label: 'Username', type: 'text' }, { name: 'email', label: 'Email', type: 'email' }, { name: 'password', label: 'Password', type: 'password' }].map(({ name, label, type }) => (
-                        <div key={name}>
-                          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">{label}</label>
-                          <input type={type} value={newUser[name]} onChange={e => setNewUser(p => ({ ...p, [name]: e.target.value }))} required className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                        </div>
-                      ))}
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Role</label>
-                        <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                          <option value="patient">Patient</option>
-                          <option value="doctor">Doctor</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                  <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowCreatePanel(false)} />
+                  <div className="fixed inset-0 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-2xl w-96 flex flex-col">
+                      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                        <h3 className="font-semibold text-slate-800">Create User</h3>
+                        <button onClick={() => setShowCreatePanel(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
                       </div>
-                      {createError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{createError}</div>}
-                      <button type="submit" disabled={createLoading} className="w-full bg-indigo-500 text-white font-semibold py-2 rounded-lg text-sm hover:bg-indigo-600 disabled:opacity-60">
-                        {createLoading ? 'Creating...' : 'Create User'}
-                      </button>
-                    </form>
+                      <form onSubmit={handleCreateUser} className="p-5 space-y-4">
+                        {[{ name: 'username', label: 'Username', type: 'text' }, { name: 'email', label: 'Email', type: 'email' }, { name: 'password', label: 'Password', type: 'password' }].map(({ name, label, type }) => (
+                          <div key={name}>
+                            <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">{label}</label>
+                            <input type={type} value={newUser[name]} onChange={e => setNewUser(p => ({ ...p, [name]: e.target.value }))} required className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          </div>
+                        ))}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Role</label>
+                          <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="patient">Patient</option>
+                            <option value="doctor">Doctor</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </div>
+                        {createError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{createError}</div>}
+                        <button type="submit" disabled={createLoading} className="w-full bg-indigo-500 text-white font-semibold py-2 rounded-lg text-sm hover:bg-indigo-600 disabled:opacity-60">
+                          {createLoading ? 'Creating...' : 'Create User'}
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 </>
               )}
@@ -444,49 +437,10 @@ export default function AdminDashboard() {
           )}
 
           {view === 'schedule' && <AdminScheduleAppointment />}
-          {view === 'assignments' && <AssignmentPanel />}
-
-          {view === 'predictions' && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-slate-800">All Predictions</h2>
-              <div className="bg-white rounded-lg border border-slate-200 p-4">
-                {areaData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={areaData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                      <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                      <Tooltip />
-                      <Area type="monotone" dataKey="count" stroke="#6366f1" fill="#e0e7ff" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : <p className="text-sm text-slate-400">No prediction data</p>}
-              </div>
-            </div>
-          )}
-
           {view === 'analytics' && <AnalyticsDashboard />}
           {view === 'comparison' && <ModelComparison />}
           {view === 'retraining' && <RetrainingPanel />}
           {view === 'alertlog' && <AlertLog />}
-          {view === 'auditlog' && (
-            <div className="bg-white rounded-lg border border-slate-200 p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Audit Log</p>
-              {auditLog.length === 0 && <p className="text-sm text-slate-400">No audit entries</p>}
-              <div className="space-y-2">
-                {auditLog.map((log, idx) => (
-                  <div key={idx} className="flex items-center gap-3 text-sm py-2 border-b border-slate-50 last:border-0">
-                    <span className="text-xs text-slate-400 w-36 flex-shrink-0">{log.timestamp || log.created_at}</span>
-                    <span className="text-slate-700 font-medium">{log.action}</span>
-                    <span className="text-slate-500 text-xs flex-1">{log.details || ''}</span>
-                    <span className="text-xs text-slate-400">{log.username || log.user}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {view === 'forum' && <Forum />}
-          {view === 'articles' && <ArticleEditor />}
           {view === 'health' && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-slate-800">System Health</h2>

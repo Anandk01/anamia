@@ -156,7 +156,7 @@ def my_alerts():
             """
             SELECT alert_id, prediction_id, recipient_email, recipient_username,
                    patient_username, hgb_value, severity_level, sent_at,
-                   delivery_status, retry_count
+                   delivery_status, retry_count, COALESCE(read, 0) as read
               FROM alert_log
              WHERE recipient_username = ?
              ORDER BY sent_at DESC
@@ -168,3 +168,22 @@ def my_alerts():
 
     alerts = [dict(row) for row in rows]
     return jsonify({"status": "ok", "alerts": alerts, "total": len(alerts)}), 200
+
+
+@alerts_bp.patch("/<int:alert_id>/read")
+@require_auth
+@require_role("doctor")
+def mark_alert_read(alert_id):
+    """Mark an alert as read."""
+    from flask import g
+    username = g.current_user["username"]
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE alert_log SET read = 1 WHERE alert_id = ? AND recipient_username = ?",
+            (alert_id, username),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"}), 200

@@ -115,51 +115,90 @@ def index():
 def get_stats():
     """Return system-wide statistics for the Admin Dashboard.
 
-    Queries:
-      - Users by role count
-      - Total predictions
-      - Predictions by severity_level
-      - Predictions by anemia_type
-      - Total critical alerts sent (delivery_status='sent')
-      - Predictions per day for the last 30 days
+    Returns flat JSON with fields expected by the frontend:
+      total_predictions, total_users, anemia_cases, severe_cases,
+      alerts_sent, retrain_count, active_doctors, avg_adherence,
+      daily_predictions, severity_distribution, type_distribution
     """
     conn = get_db()
     try:
-        # --- Users by role ---
-        role_rows = conn.execute(
-            "SELECT role, COUNT(*) AS cnt FROM user GROUP BY role"
-        ).fetchall()
-        users_by_role = {"patient": 0, "doctor": 0, "admin": 0}
-        for row in role_rows:
-            users_by_role[row["role"]] = row["cnt"]
+        # --- Total users ---
+        total_users = conn.execute(
+            "SELECT COUNT(*) FROM user"
+        ).fetchone()[0]
+
+        # --- Active doctors ---
+        active_doctors = conn.execute(
+            "SELECT COUNT(*) FROM user WHERE role = 'doctor' AND status = 'active'"
+        ).fetchone()[0]
 
         # --- Total predictions ---
         total_predictions = conn.execute(
             "SELECT COUNT(*) FROM prediction"
         ).fetchone()[0]
 
-        # --- Predictions by severity_level ---
+        # --- Anemia cases (anemia_detected = 1) ---
+        anemia_cases = conn.execute(
+            "SELECT COUNT(*) FROM prediction WHERE anemia_detected = 1"
+        ).fetchone()[0]
+
+        # --- Severe cases (severity_level = 'Severe' or hgb < 8.0) ---
+        severe_cases = conn.execute(
+            "SELECT COUNT(*) FROM prediction WHERE severity_level = 'Severe'"
+        ).fetchone()[0]
+
+        # --- Alerts sent ---
+        alerts_sent = conn.execute(
+            "SELECT COUNT(*) FROM alert_log"
+        ).fetchone()[0]
+
+        # --- Retrain count ---
+        retrain_count = 0
+        try:
+            retrain_count = conn.execute(
+                "SELECT COUNT(*) FROM model_metrics"
+            ).fetchone()[0]
+        except Exception:
+            pass
+
+        # --- Avg adherence (placeholder — null if no data) ---
+        avg_adherence = None
+        try:
+            row = conn.execute(
+                """SELECT AVG(adherence_pct) as avg_adh FROM (
+                    SELECT m.username,
+                        CASE WHEN COUNT(ml.log_id) = 0 THEN NULL
+                        ELSE ROUND(100.0 * COUNT(CASE WHEN ml.skipped = 0 THEN 1 END) / COUNT(ml.log_id), 1)
+                        END as adherence_pct
+                    FROM medication m
+                    LEFT JOIN medication_log ml ON ml.med_id = m.med_id
+                    WHERE m.active = 1
+                    GROUP BY m.username
+                )"""
+            ).fetchone()
+            if row and row["avg_adh"] is not None:
+                avg_adherence = round(row["avg_adh"], 1)
+        except Exception:
+            pass
+
+        # --- Severity distribution ---
         severity_rows = conn.execute(
             "SELECT severity_level, COUNT(*) AS cnt FROM prediction GROUP BY severity_level"
         ).fetchall()
-        predictions_by_severity = {"None": 0, "Mild": 0, "Moderate": 0, "Severe": 0}
+        severity_distribution = {"None": 0, "Mild": 0, "Moderate": 0, "Severe": 0}
         for row in severity_rows:
-            predictions_by_severity[row["severity_level"]] = row["cnt"]
+            key = row["severity_level"] or "None"
+            severity_distribution[key] = row["cnt"]
 
-        # --- Predictions by anemia_type ---
+        # --- Type distribution ---
         type_rows = conn.execute(
-            "SELECT anemia_type, COUNT(*) AS cnt FROM prediction GROUP BY anemia_type"
+            "SELECT anemia_type, COUNT(*) AS cnt FROM prediction WHERE anemia_type IS NOT NULL AND anemia_type != '' GROUP BY anemia_type"
         ).fetchall()
-        predictions_by_type = {}
+        type_distribution = {}
         for row in type_rows:
-            predictions_by_type[row["anemia_type"]] = row["cnt"]
+            type_distribution[row["anemia_type"]] = row["cnt"]
 
-        # --- Total critical alerts sent ---
-        total_alerts_sent = conn.execute(
-            "SELECT COUNT(*) FROM alert_log WHERE delivery_status = 'sent'"
-        ).fetchone()[0]
-
-        # --- Predictions per day for the last 30 days ---
+        # --- Daily predictions (last 30 days) ---
         cutoff = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
         daily_rows = conn.execute(
             """
@@ -171,23 +210,26 @@ def get_stats():
             """,
             (cutoff,),
         ).fetchall()
-        predictions_per_day = [
+        daily_predictions = [
             {"date": row["day"], "count": row["cnt"]} for row in daily_rows
         ]
 
     finally:
         conn.close()
 
-    stats = {
-        "users_by_role": users_by_role,
+    return jsonify({
         "total_predictions": total_predictions,
-        "predictions_by_severity": predictions_by_severity,
-        "predictions_by_type": predictions_by_type,
-        "total_alerts_sent": total_alerts_sent,
-        "predictions_per_day": predictions_per_day,
-    }
-
-    return jsonify({"status": "ok", "stats": stats}), 200
+        "total_users": total_users,
+        "anemia_cases": anemia_cases,
+        "severe_cases": severe_cases,
+        "alerts_sent": alerts_sent,
+        "retrain_count": retrain_count,
+        "active_doctors": active_doctors,
+        "avg_adherence": avg_adherence,
+        "daily_predictions": daily_predictions,
+        "severity_distribution": severity_distribution,
+        "type_distribution": type_distribution,
+    }), 200
 
 
 # ---------------------------------------------------------------------------

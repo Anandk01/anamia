@@ -32,8 +32,8 @@ export default function AnalyticsDashboard() {
     client.get('/api/analytics/overview', { params: { range } })
       .then(res => setOverview(res.data))
       .catch(() => {});
-    client.get('/api/analytics/trends', { params: { range } })
-      .then(res => setTrends(res.data?.daily || []))
+    client.get('/api/analytics/trends', { params: { period_days: range === '7d' ? 7 : range === '90d' ? 90 : 30 } })
+      .then(res => setTrends(res.data?.trends || res.data?.daily || []))
       .catch(() => {});
   }, [range]);
 

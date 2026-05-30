@@ -31,6 +31,9 @@ def get_overview_metrics(doctor_username=None, date_range=None):
         metrics['anemia_detected_count'] = conn.execute(
             "SELECT COUNT(*) FROM prediction WHERE anemia_detected = 1"
         ).fetchone()[0]
+        metrics['severe_cases'] = conn.execute(
+            "SELECT COUNT(*) FROM prediction WHERE severity_level = 'Severe'"
+        ).fetchone()[0]
 
         if doctor_username:
             metrics['my_patients'] = conn.execute(

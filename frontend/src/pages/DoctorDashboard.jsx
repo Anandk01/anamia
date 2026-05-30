@@ -5,8 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Home, FlaskConical, Users, Calendar, FileText, MessageCircle,
-  MessageSquare, BookOpen, BarChart3, Bell, TrendingUp, Settings, LogOut,
+  Home, FlaskConical, Users, Calendar, FileText,
+  BarChart3, Bell, TrendingUp, Settings, LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.js';
@@ -22,15 +22,9 @@ import HbTrendChart from '../components/HbTrendChart.jsx';
 import PDFDownloadButton from '../components/PDFDownloadButton.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
 import DoctorSchedule from '../components/DoctorSchedule.jsx';
-import DoctorChat from '../components/DoctorChat.jsx';
-import Forum from '../components/Forum.jsx';
-import PostDetail from '../components/PostDetail.jsx';
-import CreatePost from '../components/CreatePost.jsx';
-import ArticleEditor from '../components/ArticleEditor.jsx';
 import AnalyticsDashboard from '../components/AnalyticsDashboard.jsx';
 import DoctorAvailability from '../components/DoctorAvailability.jsx';
 import PrescribeMedicationForm from '../components/PrescribeMedicationForm.jsx';
-import ProfileSettings from '../components/ProfileSettings.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
 import ThemeToggle from '../components/ThemeToggle.jsx';
 import Breadcrumb from '../components/Breadcrumb.jsx';
@@ -84,11 +78,7 @@ export default function DoctorDashboard() {
   const [forwardForm, setForwardForm] = useState({ target_doctor_id: '', slot_date: '', slot_time: '10:00', notes: '' });
 
   // Real-time badge counts from global socket
-  const { unreadMessages, pendingAppointments, activeAlerts } = useSocket() || {};
-
-  // Forum state
-  const [forumView, setForumView] = useState('list');
-  const [selectedPost, setSelectedPost] = useState(null);
+  const { pendingAppointments, activeAlerts } = useSocket() || {};
 
   useEffect(() => {
     client.get('/api/alerts/mine').then(r => {
@@ -96,9 +86,18 @@ export default function DoctorDashboard() {
       setAlerts(data);
       setBadges(b => ({ ...b, alerts: data.filter(a => !a.read).length }));
     }).catch(() => {});
-    client.get('/api/notifications/unread-count').then(r => setBadges(b => ({ ...b, messages: r.data?.count || 0 }))).catch(() => {});
     client.get('/api/appointments/pending-count').then(r => setBadges(b => ({ ...b, appointments: r.data?.count || 0 }))).catch(() => {});
-    client.get('/api/analytics/overview').then(r => setQuickStats(r.data || {})).catch(() => {});
+    client.get('/api/analytics/overview').then(r => {
+      const m = r.data?.metrics || r.data || {};
+      setQuickStats({
+        total_users: m.total_patients || 0,
+        total_predictions: m.total_predictions || 0,
+        total_appointments: m.total_appointments || 0,
+        severe_cases: 0,
+        avg_adherence: null,
+        ...m,
+      });
+    }).catch(() => {});
     // Fetch assigned patients for CBC form dropdown
     client.get('/api/assignment/my-patients').then(r => {
       setAssignedPatients(r.data?.patients || []);
@@ -111,9 +110,6 @@ export default function DoctorDashboard() {
     { id: 'records', label: 'Patient Records', Icon: Users },
     { id: 'schedule', label: 'Appointments', Icon: Calendar, badge: pendingAppointments || badges.appointments, badgeColor: '#3b82f6' },
     { id: 'prescribe', label: 'Prescribe', Icon: FileText },
-    { id: 'messages', label: 'Messages', Icon: MessageCircle, badge: unreadMessages || badges.messages },
-    { id: 'forum', label: 'Forum', Icon: MessageSquare },
-    { id: 'articles', label: 'Articles', Icon: BookOpen },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
     { id: 'alerts', label: 'Alerts', Icon: Bell, badge: activeAlerts || badges.alerts, badgeColor: '#ef4444' },
     { id: 'trends', label: 'Hb Trends', Icon: TrendingUp },
@@ -189,9 +185,7 @@ export default function DoctorDashboard() {
               key={id}
               onClick={() => {
                 setView(id);
-                if (id !== 'forum') { setForumView('list'); setSelectedPost(null); }
                 // Clear badge when section is viewed
-                if (id === 'messages') setBadges(b => ({ ...b, messages: 0 }));
                 if (id === 'schedule') setBadges(b => ({ ...b, appointments: 0 }));
                 if (id === 'alerts') setBadges(b => ({ ...b, alerts: 0 }));
               }}
@@ -239,7 +233,7 @@ export default function DoctorDashboard() {
 
         {/* Quick stats */}
         <div className="flex items-center gap-3 px-5 py-2 bg-white border-b border-slate-100 flex-shrink-0">
-          <StatPill label="Patients" value={quickStats.total_users || '—'} color="#6366f1" />
+          <StatPill label="Patients" value={quickStats.my_patients || quickStats.total_patients || '—'} color="#6366f1" />
           <StatPill label="Pending Appts" value={badges.appointments || 0} color="#f59e0b" />
           <StatPill label="Critical Alerts" value={badges.alerts || 0} color="#ef4444" />
           <StatPill label="Avg Adherence" value={quickStats.avg_adherence ? `${quickStats.avg_adherence}%` : '—'} color="#10b981" />
@@ -251,7 +245,7 @@ export default function DoctorDashboard() {
           {view === 'home' && (
             <div className="space-y-5">
               <div className="grid grid-cols-3 gap-4">
-                <StatCard label="Total Patients" value={quickStats.total_users} icon={Users} color="#6366f1" />
+                <StatCard label="Total Patients" value={quickStats.my_patients || quickStats.total_patients} icon={Users} color="#6366f1" />
                 <StatCard label="Predictions Today" value={quickStats.predictions_today || quickStats.total_predictions} icon={FlaskConical} color="#8b5cf6" />
                 <StatCard label="Critical Alerts" value={badges.alerts || 0} icon={Bell} color="#ef4444" />
                 <StatCard label="Pending Appointments" value={badges.appointments || 0} icon={Calendar} color="#f59e0b" />
@@ -302,7 +296,7 @@ export default function DoctorDashboard() {
           {/* Assessment */}
           {view === 'assessment' && (
             <div className="flex gap-5">
-              <div className="w-[420px] flex-shrink-0 bg-white rounded-lg border border-slate-200 p-4">
+              <div className="flex-1 bg-white rounded-lg border border-slate-200 p-4">
                 <div className="mb-4">
                   <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Patient Username</label>
                   <input
@@ -365,7 +359,7 @@ export default function DoctorDashboard() {
           {view === 'records' && <ReportHistory username={username} role="doctor" />}
           {view === 'schedule' && <DoctorSchedule />}
           {view === 'prescribe' && (
-            <div className="max-w-lg">
+            <div>
               <h2 className="text-lg font-semibold text-slate-800 mb-4">Prescribe Medication</h2>
               <div className="bg-white rounded-lg border border-slate-200 p-5">
                 {!patientUsername && (
@@ -381,30 +375,6 @@ export default function DoctorDashboard() {
               </div>
             </div>
           )}
-          {view === 'messages' && <DoctorChat />}
-          {view === 'forum' && (
-            <div className="transition-all duration-200">
-              {forumView === 'list' && (
-                <Forum
-                  onSelectPost={(post) => { setSelectedPost(post); setForumView('detail'); }}
-                  onNewPost={() => setForumView('create')}
-                />
-              )}
-              {forumView === 'detail' && selectedPost && (
-                <PostDetail
-                  postId={selectedPost.id}
-                  onBack={() => { setForumView('list'); setSelectedPost(null); }}
-                />
-              )}
-              {forumView === 'create' && (
-                <CreatePost
-                  onBack={() => setForumView('list')}
-                  onCreated={() => setForumView('list')}
-                />
-              )}
-            </div>
-          )}
-          {view === 'articles' && <ArticleEditor />}
           {view === 'analytics' && <AnalyticsDashboard />}
           {view === 'alerts' && (
             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
@@ -458,7 +428,6 @@ export default function DoctorDashboard() {
           {view === 'settings' && (
             <div className="space-y-6">
               <DoctorAvailability />
-              <ProfileSettings />
             </div>
           )}
         </div>

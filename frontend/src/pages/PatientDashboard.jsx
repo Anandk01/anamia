@@ -5,8 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Home, FlaskConical, Table2, TrendingUp, Calendar, Pill,
-  MessageSquare, BookOpen, FileText, Utensils, Stethoscope, Settings, LogOut,
+  Home, Table2, TrendingUp, Calendar, Pill,
+  FileText, Utensils, Stethoscope, Settings, LogOut, FlaskConical,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -14,22 +14,13 @@ import { useAuth } from '../hooks/useAuth.js';
 import { useSocket } from '../contexts/SocketContext.jsx';
 import client from '../api/client.js';
 
-import CBCForm from '../components/CBCForm.jsx';
-import PredictionResult from '../components/PredictionResult.jsx';
-import DietRecommendations from '../components/DietRecommendations.jsx';
-import HealthTips from '../components/HealthTips.jsx';
 import ReportHistory from '../components/ReportHistory.jsx';
 import HbTrendChart from '../components/HbTrendChart.jsx';
-import PDFDownloadButton from '../components/PDFDownloadButton.jsx';
 import Chatbot from '../components/Chatbot.jsx';
 import LanguageSelector from '../components/LanguageSelector.jsx';
 import AppointmentCalendar from '../components/AppointmentCalendar.jsx';
 import BookingModal from '../components/BookingModal.jsx';
 import MedicationTracker from '../components/MedicationTracker.jsx';
-import Forum from '../components/Forum.jsx';
-import PostDetail from '../components/PostDetail.jsx';
-import CreatePost from '../components/CreatePost.jsx';
-import EducationCenter from '../components/EducationCenter.jsx';
 import PrescriptionView from '../components/PrescriptionView.jsx';
 import SymptomChecker from '../components/SymptomChecker.jsx';
 import ProfileSettings from '../components/ProfileSettings.jsx';
@@ -63,6 +54,46 @@ function StatCard({ label, value, sub, icon: Icon, color }) {
   );
 }
 
+function DietFromPrescriptions() {
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    client.get('/api/prescriptions/mine')
+      .then(res => setPrescriptions(res.data?.prescriptions || []))
+      .catch(() => setPrescriptions([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="text-sm text-slate-400">Loading diet plans...</div>;
+
+  const withDiet = prescriptions.filter(p => p.diet_plan);
+  if (withDiet.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 text-slate-400 text-sm gap-2" style={{ border: '2px dashed #e2e8f0', borderRadius: '0.5rem' }}>
+        <span className="text-2xl">🥗</span>
+        <p>No diet plans prescribed yet</p>
+        <p className="text-xs">Your doctor will add diet recommendations with your prescriptions</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold text-slate-800">Diet Plans</h2>
+      {withDiet.map((p, idx) => (
+        <div key={idx} className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-slate-700">From Dr. {p.doctor_username || 'Unknown'}</p>
+            <p className="text-xs text-slate-400">{p.prescribed_at || p.created_at || ''}</p>
+          </div>
+          <div className="text-sm text-slate-600 whitespace-pre-wrap">{p.diet_plan}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PatientDashboard() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -71,10 +102,6 @@ export default function PatientDashboard() {
   const username = user?.username || 'patient';
 
   const [view, setView] = useState('home');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [veganOnly, setVeganOnly] = useState(user?.vegan_diet === 1);
   const [badges, setBadges] = useState({});
   const [quickStats, setQuickStats] = useState({});
 
@@ -101,10 +128,6 @@ export default function PatientDashboard() {
   const [bookingSlot, setBookingSlot] = useState(null);
   const [doctors, setDoctors] = useState([]);
   const [myAppointments, setMyAppointments] = useState([]);
-
-  // Forum state
-  const [forumView, setForumView] = useState('list');
-  const [selectedPost, setSelectedPost] = useState(null);
 
   useEffect(() => {
     // Fetch badge counts
@@ -151,28 +174,14 @@ export default function PatientDashboard() {
 
   const NAV_ITEMS = [
     { id: 'home', label: 'Home', Icon: Home },
-    { id: 'test', label: 'New Test', Icon: FlaskConical },
     { id: 'history', label: 'History', Icon: Table2 },
-    { id: 'progress', label: 'Progress', Icon: TrendingUp },
     { id: 'appointments', label: 'Appointments', Icon: Calendar, badge: pendingAppointments || badges.appointments },
     { id: 'medications', label: 'Medications', Icon: Pill, badge: badges.medications, badgeColor: '#f59e0b' },
-    { id: 'forum', label: 'Forum', Icon: MessageSquare },
-    { id: 'education', label: 'Education', Icon: BookOpen },
     { id: 'prescriptions', label: 'Prescriptions', Icon: FileText },
     { id: 'diet', label: 'Diet Plan', Icon: Utensils },
     { id: 'symptom', label: 'Symptom Checker', Icon: Stethoscope },
     { id: 'settings', label: 'Settings', Icon: Settings },
   ];
-
-  async function handleCBCSubmit(cbcData) {
-    setLoading(true); setError(null); setResult(null);
-    try {
-      const res = await client.post('/api/predict', { username, ...cbcData });
-      setResult(res.data);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Prediction failed.');
-    } finally { setLoading(false); }
-  }
 
   async function handleLogout() {
     await logout();
@@ -199,7 +208,6 @@ export default function PatientDashboard() {
               key={id}
               onClick={() => {
                 setView(id);
-                if (id !== 'forum') { setForumView('list'); setSelectedPost(null); }
                 // Clear badge when section is viewed
                 if (id === 'appointments') setBadges(b => ({ ...b, appointments: 0 }));
                 if (id === 'medications') setBadges(b => ({ ...b, medications: 0 }));
@@ -273,52 +281,18 @@ export default function PatientDashboard() {
                   <MedicationTracker compact />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                <button onClick={() => setView('test')} className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-4 text-sm font-medium hover:scale-[1.02] transition-transform shadow-lg flex items-center gap-2">
-                  <FlaskConical size={16} /> New Blood Test
-                </button>
-                <button onClick={() => setView('appointments')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-4">
+                <button onClick={() => setView('appointments')} className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-4 text-sm font-medium hover:scale-[1.02] transition-transform shadow-lg flex items-center gap-2">
                   <Calendar size={16} /> Book Appointment
                 </button>
-                <button onClick={() => setView('education')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
-                  <BookOpen size={16} /> Learn About Anemia
+                <button onClick={() => setView('prescriptions')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
+                  <FileText size={16} /> View Prescriptions
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* New Test */}
-          {view === 'test' && (
-            <div className="flex gap-5">
-              <div className="w-96 flex-shrink-0 bg-white rounded-lg border border-slate-200 p-4">
-                <CBCForm onSubmit={handleCBCSubmit} loading={loading} />
-                {error && <div className="mt-3 bg-red-50 border border-red-200 text-red-600 rounded px-3 py-2 text-sm">{error}</div>}
-              </div>
-              <div className="flex-1 space-y-4">
-                {loading && <div className="animate-pulse space-y-3"><div className="h-16 bg-slate-200 rounded" /><div className="h-32 bg-slate-200 rounded" /></div>}
-                {!loading && result && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-slate-500 uppercase">Result</h3>
-                      <PDFDownloadButton reportData={result} username={username} />
-                    </div>
-                    <PredictionResult result={result} />
-                    {Array.isArray(result.diet_recs) && result.diet_recs.length > 0 && <DietRecommendations items={result.diet_recs} veganOnly={veganOnly} />}
-                    {Array.isArray(result.health_tips) && result.health_tips.length > 0 && <HealthTips tips={result.health_tips} severity={result.severity_level} />}
-                  </>
-                )}
-                {!loading && !result && (
-                  <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm gap-3">
-                    <FlaskConical size={32} className="opacity-30" />
-                    <p>Enter CBC values and submit to see prediction</p>
-                  </div>
-                )}
               </div>
             </div>
           )}
 
           {view === 'history' && <ReportHistory username={username} role="patient" />}
-          {view === 'progress' && <HbTrendChart key={progressKey} username={username} source="doctor" />}
           {view === 'appointments' && (
             <>
               <div className="flex items-center justify-between mb-4">
@@ -359,31 +333,8 @@ export default function PatientDashboard() {
             </>
           )}
           {view === 'medications' && <MedicationTracker />}
-          {view === 'forum' && (
-            <div className="transition-all duration-200">
-              {forumView === 'list' && (
-                <Forum
-                  onSelectPost={(post) => { setSelectedPost(post); setForumView('detail'); }}
-                  onNewPost={() => setForumView('create')}
-                />
-              )}
-              {forumView === 'detail' && selectedPost && (
-                <PostDetail
-                  postId={selectedPost.id}
-                  onBack={() => { setForumView('list'); setSelectedPost(null); }}
-                />
-              )}
-              {forumView === 'create' && (
-                <CreatePost
-                  onBack={() => setForumView('list')}
-                  onCreated={() => setForumView('list')}
-                />
-              )}
-            </div>
-          )}
-          {view === 'education' && <EducationCenter />}
           {view === 'prescriptions' && <PrescriptionView />}
-          {view === 'diet' && <DietRecommendations items={[]} veganOnly={veganOnly} />}
+          {view === 'diet' && <DietFromPrescriptions />}
           {view === 'symptom' && <SymptomChecker />}
           {view === 'settings' && <ProfileSettings />}
         </div>

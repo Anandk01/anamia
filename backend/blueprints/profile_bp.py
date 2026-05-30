@@ -30,11 +30,12 @@ def get_profile():
 @require_auth
 @require_role("doctor", "admin")
 def get_patient_profile(username):
-    """Get a patient's profile (doctor/admin only)."""
+    """Get a patient's profile (doctor/admin only).
+    Returns basic user info even if profile fields are empty."""
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT username, email, age, sex, blood_type, known_conditions, dietary_preferences, created_at FROM user WHERE username = ?",
+            "SELECT username, email, age, sex, blood_type, known_conditions, dietary_preferences, created_at, role FROM user WHERE username = ?",
             (username,),
         ).fetchone()
         if not row:
