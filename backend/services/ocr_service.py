@@ -116,18 +116,33 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
     # For PDFs, convert first page to image
     if mime_type == "application/pdf":
         try:
-            from pdf2image import convert_from_path
-            images = convert_from_path(image_path, first_page=1, last_page=1)
-            if images:
-                import tempfile
-                tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-                images[0].save(tmp.name, "JPEG")
-                image_path = tmp.name
-                mime_type = "image/jpeg"
-            else:
-                return {"values": {}, "confidence": {}, "warnings": ["Failed to convert PDF to image"]}
+            import fitz  # PyMuPDF
+            doc = fitz.open(image_path)
+            page = doc[0]
+            pix = page.get_pixmap(dpi=200)
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            pix.save(tmp.name)
+            image_path = tmp.name
+            mime_type = "image/png"
+            doc.close()
+        except ImportError:
+            # PyMuPDF not available, try pdf2image
+            try:
+                from pdf2image import convert_from_path
+                images = convert_from_path(image_path, first_page=1, last_page=1)
+                if images:
+                    import tempfile
+                    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                    images[0].save(tmp.name, "JPEG")
+                    image_path = tmp.name
+                    mime_type = "image/jpeg"
+                else:
+                    return {"values": {}, "confidence": {}, "warnings": ["Failed to convert PDF to image"]}
+            except Exception as e:
+                return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed. Please upload a JPEG/PNG image instead."]}
         except Exception as e:
-            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed: {str(e)}"]}
+            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed. Please upload a JPEG/PNG image instead."]}
 
     # Read and encode file as base64
     with open(image_path, "rb") as f:
