@@ -118,31 +118,21 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
         try:
             import fitz  # PyMuPDF
             doc = fitz.open(image_path)
+            if doc.page_count == 0:
+                return {"values": {}, "confidence": {}, "warnings": ["PDF has no pages"]}
             page = doc[0]
             pix = page.get_pixmap(dpi=200)
             import tempfile
-            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            pix.save(tmp.name)
-            image_path = tmp.name
+            tmp_path = image_path + ".png"
+            pix.save(tmp_path)
+            image_path = tmp_path
             mime_type = "image/png"
             doc.close()
-        except ImportError:
-            # PyMuPDF not available, try pdf2image
-            try:
-                from pdf2image import convert_from_path
-                images = convert_from_path(image_path, first_page=1, last_page=1)
-                if images:
-                    import tempfile
-                    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-                    images[0].save(tmp.name, "JPEG")
-                    image_path = tmp.name
-                    mime_type = "image/jpeg"
-                else:
-                    return {"values": {}, "confidence": {}, "warnings": ["Failed to convert PDF to image"]}
-            except Exception as e:
-                return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed. Please upload a JPEG/PNG image instead."]}
+            logger.info("PDF converted to PNG: %s", tmp_path)
         except Exception as e:
-            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed. Please upload a JPEG/PNG image instead."]}
+            logger.error("PDF conversion error: %s", e)
+            # Last resort: try sending PDF as-is with image/jpeg mime (some APIs handle it)
+            mime_type = "image/jpeg"
 
     # Read and encode file as base64
     with open(image_path, "rb") as f:
