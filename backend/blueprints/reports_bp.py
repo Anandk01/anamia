@@ -202,6 +202,20 @@ def get_trend(target_username: str):
     if role not in ("admin", "doctor") and target_username != username:
         return jsonify({"status": "error", "message": "Access denied"}), 403
 
+    # Validate target is a patient (not another doctor/admin)
+    if role == "doctor" and target_username != username:
+        conn_check = get_db()
+        try:
+            target_user = conn_check.execute(
+                "SELECT role FROM user WHERE username = ?", (target_username,)
+            ).fetchone()
+            if target_user and target_user["role"] != "patient":
+                return jsonify({"status": "error", "message": f"'{target_username}' is not a patient"}), 400
+            if not target_user:
+                return jsonify({"status": "error", "message": f"User '{target_username}' not found"}), 404
+        finally:
+            conn_check.close()
+
     conn = get_db()
     try:
         # Support ?source=doctor filter to only show doctor-submitted predictions

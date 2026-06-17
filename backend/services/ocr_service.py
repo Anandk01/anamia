@@ -99,93 +99,74 @@ def _get_image_from_file(filepath: str, mime_type: str):
 
 
 def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
-    """
-    Use Groq AI (Llama 4 Scout) to extract CBC values from the report file.
-    Returns a dict with 'values', 'confidence', and 'warnings'.
-    """
-    from openai import OpenAI
-    import base64
-    import json
+    """Use Gemini 3.5 Flash to extract CBC values from the report file."""
+    import json as _json
 
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        return {"values": {}, "confidence": {}, "warnings": ["GROQ_API_KEY not configured"]}
+        return {"values": {}, "confidence": {}, "warnings": ["GEMINI_API_KEY not configured"]}
 
-    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+    from google import genai
+    from google.genai import types
+    client = genai.Client(api_key=api_key)
 
-    # For PDFs, convert first page to image
+    # For PDFs, convert to image first
     if mime_type == "application/pdf":
         try:
-            import fitz  # PyMuPDF
+            import fitz
             doc = fitz.open(image_path)
             if doc.page_count == 0:
                 return {"values": {}, "confidence": {}, "warnings": ["PDF has no pages"]}
             page = doc[0]
-            # Render at 150 DPI to keep file size reasonable
             pix = page.get_pixmap(dpi=150)
-            # Save as JPEG (smaller than PNG)
             img_bytes = pix.tobytes("jpeg")
             doc.close()
-            # Write to a temp file
             import tempfile
             tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False, dir=os.path.dirname(image_path))
             tmp.write(img_bytes)
             tmp.close()
             image_path = tmp.name
             mime_type = "image/jpeg"
-            logger.info("PDF converted to JPEG: %s (%d bytes)", tmp.name, len(img_bytes))
         except Exception as e:
-            logger.error("PDF conversion error: %s", e)
-            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed: {str(e)}. Upload JPEG/PNG instead."]}
+            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed: {e}"]}
 
-    # Read and encode file as base64
+    # Read file
     with open(image_path, "rb") as f:
         file_data = f.read()
-    
-    # Check file size — Groq has limits
-    if len(file_data) > 10 * 1024 * 1024:  # 10MB
-        return {"values": {}, "confidence": {}, "warnings": ["Image too large. Please upload a smaller file (< 10MB)."]}
-    
-    b64_data = base64.b64encode(file_data).decode("utf-8")
 
-    # Ensure mime type is valid image
-    if mime_type not in ("image/jpeg", "image/png", "image/jpg", "image/webp", "image/gif"):
-        # Try to detect from file header
+    if len(file_data) > 10 * 1024 * 1024:
+        return {"values": {}, "confidence": {}, "warnings": ["File too large (>10MB)"]}
+
+    # Detect mime from bytes if needed
+    if mime_type not in ("image/jpeg", "image/png", "image/webp"):
         if file_data[:3] == b'\xff\xd8\xff':
             mime_type = "image/jpeg"
         elif file_data[:8] == b'\x89PNG\r\n\x1a\n':
             mime_type = "image/png"
         else:
-            return {"values": {}, "confidence": {}, "warnings": ["Unsupported file format. Please upload JPEG or PNG."]}
+            mime_type = "image/jpeg"
 
-    prompt = """Extract Complete Blood Count (CBC) values from this lab report image.
-Return ONLY a JSON object with these keys: rbc, mcv, mch, mchc, rdw, tlc, plt, hgb.
-Only include numeric values. If a value is not found, omit the key."""
+    prompt = """Extract CBC values from this lab report. Return ONLY JSON:
+{"rbc": number, "mcv": number, "mch": number, "mchc": number, "rdw": number, "tlc": number, "plt": number, "hgb": number}
+Omit keys if not found."""
 
     try:
-        response = client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_data}"}},
-                    ],
-                }
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=[
+                prompt,
+                types.Part.from_bytes(data=file_data, mime_type=mime_type),
             ],
-            max_tokens=500,
-            temperature=0.1,
         )
-        raw_text = response.choices[0].message.content.strip()
+        raw_text = response.text.strip()
 
-        # Parse JSON from response
+        # Parse JSON
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
         elif "```" in raw_text:
             raw_text = raw_text.split("```")[1].split("```")[0].strip()
 
-        extracted_data = json.loads(raw_text)
+        extracted_data = _json.loads(raw_text)
 
         values = {}
         confidence = {}
@@ -198,20 +179,16 @@ Only include numeric values. If a value is not found, omit the key."""
                     num_val = float(val)
                     values[field] = num_val
                     lo, hi = _TYPICAL_RANGES[field]
-                    if lo <= num_val <= hi:
-                        confidence[field] = "High"
-                    else:
-                        confidence[field] = "Medium"
-                        warnings.append(f"{_FIELD_LABELS[field]} value {num_val} is outside typical range.")
+                    confidence[field] = "High" if lo <= num_val <= hi else "Medium"
                 except (ValueError, TypeError):
-                    warnings.append(f"Non-numeric value extracted for {field}: {val}")
+                    warnings.append(f"Non-numeric {field}: {val}")
             else:
-                warnings.append(f"Could not find {_FIELD_LABELS[field]} in the report.")
+                warnings.append(f"Could not find {_FIELD_LABELS[field]}")
 
         return {"values": values, "confidence": confidence, "warnings": warnings}
 
     except Exception as e:
-        logger.error("AI OCR failed: %s", e)
+        logger.error("Gemini OCR failed: %s", e)
         return {"values": {}, "confidence": {}, "warnings": [f"AI OCR failed: {str(e)}"]}
 
 
