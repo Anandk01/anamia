@@ -21,29 +21,10 @@ import base64
 import logging
 from typing import Any
 
-from google import genai
-from google.genai import types
-
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Gemini Client Helper
-# ---------------------------------------------------------------------------
-
-_client = None
-
-def _get_client():
-    global _client
-    if _client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY not set in environment")
-        _client = genai.Client(api_key=api_key)
-    return _client
-
-# ---------------------------------------------------------------------------
-# Typical reference ranges used for "Medium" confidence detection
-# (value outside range → unusual → Medium confidence)
+# Typical reference ranges
 # ---------------------------------------------------------------------------
 _TYPICAL_RANGES: dict[str, tuple[float, float]] = {
     "hgb":  (7.0,  20.0),
@@ -119,61 +100,64 @@ def _get_image_from_file(filepath: str, mime_type: str):
 
 def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
     """
-    Use Google Gemini to extract CBC values from the report file.
+    Use Groq AI to extract CBC values from the report file.
     Returns a dict with 'values', 'confidence', and 'warnings'.
     """
-    client = _get_client()
-    
-    # Read file data
+    from openai import OpenAI
+    import base64
+    import json
+
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return {"values": {}, "confidence": {}, "warnings": ["GROQ_API_KEY not configured"]}
+
+    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+
+    # Read and encode file
     with open(image_path, "rb") as f:
         file_data = f.read()
+    b64_data = base64.b64encode(file_data).decode("utf-8")
 
-    prompt = """
-    You are a medical OCR assistant. Extract Complete Blood Count (CBC) values from this lab report.
-    Return ONLY a JSON object with the following keys:
-    - "rbc": Red Blood Cell count
-    - "mcv": Mean Corpuscular Volume
-    - "mch": Mean Corpuscular Hemoglobin
-    - "mchc": Mean Corpuscular Hemoglobin Concentration
-    - "rdw": Red Cell Distribution Width
-    - "tlc": Total Leucocyte Count (or WBC)
-    - "plt": Platelet count
-    - "hgb": Hemoglobin (Haemoglobin)
-
-    Rules:
-    1. Only include numeric values.
-    2. If a value is not found, omit the key or set it to null.
-    3. Use the most clear and unambiguous value if multiple are present.
-    """
+    prompt = """Extract Complete Blood Count (CBC) values from this lab report image.
+Return ONLY a JSON object with these keys: rbc, mcv, mch, mchc, rdw, tlc, plt, hgb.
+Only include numeric values. If a value is not found, omit the key."""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=[
-                prompt,
-                types.Part.from_bytes(data=file_data, mime_type=mime_type)
+        response = client.chat.completions.create(
+            model="llama-3.2-90b-vision-preview",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_data}"}},
+                    ],
+                }
             ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            )
+            max_tokens=500,
+            temperature=0.1,
         )
-        
-        import json
-        extracted_data = json.loads(response.text)
-        
-        # Filter and clean values
+        raw_text = response.choices[0].message.content.strip()
+
+        # Parse JSON from response
+        # Handle markdown code blocks
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].split("```")[0].strip()
+
+        extracted_data = json.loads(raw_text)
+
         values = {}
         confidence = {}
         warnings = []
-        
+
         for field in ["rbc", "mcv", "mch", "mchc", "rdw", "tlc", "plt", "hgb"]:
             val = extracted_data.get(field)
             if val is not None:
                 try:
                     num_val = float(val)
                     values[field] = num_val
-                    
-                    # Basic range-based confidence (similar to old logic)
                     lo, hi = _TYPICAL_RANGES[field]
                     if lo <= num_val <= hi:
                         confidence[field] = "High"
@@ -184,20 +168,12 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
                     warnings.append(f"Non-numeric value extracted for {field}: {val}")
             else:
                 warnings.append(f"Could not find {_FIELD_LABELS[field]} in the report.")
-                
-        return {
-            "values": values,
-            "confidence": confidence,
-            "warnings": warnings
-        }
-        
+
+        return {"values": values, "confidence": confidence, "warnings": warnings}
+
     except Exception as e:
-        logger.error("Gemini OCR failed: %s", e)
-        return {
-            "values": {},
-            "confidence": {},
-            "warnings": [f"AI OCR failed: {str(e)}"]
-        }
+        logger.error("AI OCR failed: %s", e)
+        return {"values": {}, "confidence": {}, "warnings": [f"AI OCR failed: {str(e)}"]}
 
 
 def _extract_fields(text: str) -> tuple[dict[str, float], dict[str, str], list[str]]:
