@@ -121,27 +121,42 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
             if doc.page_count == 0:
                 return {"values": {}, "confidence": {}, "warnings": ["PDF has no pages"]}
             page = doc[0]
-            pix = page.get_pixmap(dpi=200)
-            import tempfile
-            tmp_path = image_path + ".png"
-            pix.save(tmp_path)
-            image_path = tmp_path
-            mime_type = "image/png"
+            # Render at 150 DPI to keep file size reasonable
+            pix = page.get_pixmap(dpi=150)
+            # Save as JPEG (smaller than PNG)
+            img_bytes = pix.tobytes("jpeg")
             doc.close()
-            logger.info("PDF converted to PNG: %s", tmp_path)
+            # Write to a temp file
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False, dir=os.path.dirname(image_path))
+            tmp.write(img_bytes)
+            tmp.close()
+            image_path = tmp.name
+            mime_type = "image/jpeg"
+            logger.info("PDF converted to JPEG: %s (%d bytes)", tmp.name, len(img_bytes))
         except Exception as e:
             logger.error("PDF conversion error: %s", e)
-            # Last resort: try sending PDF as-is with image/jpeg mime (some APIs handle it)
-            mime_type = "image/jpeg"
+            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed: {str(e)}. Upload JPEG/PNG instead."]}
 
     # Read and encode file as base64
     with open(image_path, "rb") as f:
         file_data = f.read()
+    
+    # Check file size — Groq has limits
+    if len(file_data) > 10 * 1024 * 1024:  # 10MB
+        return {"values": {}, "confidence": {}, "warnings": ["Image too large. Please upload a smaller file (< 10MB)."]}
+    
     b64_data = base64.b64encode(file_data).decode("utf-8")
 
-    # Ensure mime type is image
-    if mime_type not in ("image/jpeg", "image/png", "image/jpg", "image/webp"):
-        mime_type = "image/jpeg"
+    # Ensure mime type is valid image
+    if mime_type not in ("image/jpeg", "image/png", "image/jpg", "image/webp", "image/gif"):
+        # Try to detect from file header
+        if file_data[:3] == b'\xff\xd8\xff':
+            mime_type = "image/jpeg"
+        elif file_data[:8] == b'\x89PNG\r\n\x1a\n':
+            mime_type = "image/png"
+        else:
+            return {"values": {}, "confidence": {}, "warnings": ["Unsupported file format. Please upload JPEG or PNG."]}
 
     prompt = """Extract Complete Blood Count (CBC) values from this lab report image.
 Return ONLY a JSON object with these keys: rbc, mcv, mch, mchc, rdw, tlc, plt, hgb.
