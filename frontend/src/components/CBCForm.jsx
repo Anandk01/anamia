@@ -9,14 +9,14 @@ import { Paperclip } from 'lucide-react';
 import client from '../api/client.js';
 
 const FIELDS = [
-  { key: 'RBC',  label: 'RBC',  unit: 'M/µL',  ref: '4.0–5.5',  min: 0, max: 10 },
-  { key: 'MCV',  label: 'MCV',  unit: 'fL',    ref: '80–100',   min: 0, max: 200 },
-  { key: 'MCH',  label: 'MCH',  unit: 'pg',    ref: '27–33',    min: 0, max: 60 },
-  { key: 'MCHC', label: 'MCHC', unit: 'g/dL',  ref: '32–36',    min: 0, max: 50 },
-  { key: 'RDW',  label: 'RDW',  unit: '%',     ref: '11.5–14.5',min: 0, max: 30 },
-  { key: 'TLC',  label: 'TLC',  unit: 'K/µL',  ref: '4.0–11.0', min: 0, max: 50 },
-  { key: 'PLT',  label: 'PLT',  unit: 'K/µL',  ref: '150–400',  min: 0, max: 1500 },
-  { key: 'HGB',  label: 'HGB',  unit: 'g/dL',  ref: '12.0–17.0',min: 0, max: 25 },
+  { key: 'RBC',  label: 'RBC',  unit: 'M/µL',  ref: '4.0–5.5',  min: 0, max: 10, step: '0.01' },
+  { key: 'MCV',  label: 'MCV',  unit: 'fL',    ref: '80–100',   min: 0, max: 200, step: '0.1' },
+  { key: 'MCH',  label: 'MCH',  unit: 'pg',    ref: '27–33',    min: 0, max: 60, step: '0.1' },
+  { key: 'MCHC', label: 'MCHC', unit: 'g/dL',  ref: '32–36',    min: 0, max: 50, step: '0.1' },
+  { key: 'RDW',  label: 'RDW',  unit: '%',     ref: '11.5–14.5',min: 0, max: 30, step: '0.1' },
+  { key: 'TLC',  label: 'TLC',  unit: 'K/µL',  ref: '4.0–11.0', min: 0, max: 50, step: '0.01' },
+  { key: 'PLT',  label: 'PLT',  unit: 'K/µL',  ref: '150–400',  min: 0, max: 1500, step: '1' },
+  { key: 'HGB',  label: 'HGB',  unit: 'g/dL',  ref: '12.0–17.0',min: 0, max: 25, step: '0.1' },
 ];
 
 const EMPTY = Object.fromEntries(FIELDS.map((f) => [f.key, '']));
@@ -149,7 +149,7 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
 
       {/* 2-column grid */}
       <div className="grid grid-cols-2 gap-3">
-        {FIELDS.map(({ key, label, unit, ref: refRange }) => {
+        {FIELDS.map(({ key, label, unit, ref: refRange, step }) => {
           const val = displayValues[key];
           const err = touched[key] ? validateField(key, val) : null;
           const conf = confidence[key.toLowerCase()] || ocrConfidence?.[key.toLowerCase()];
@@ -176,7 +176,7 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
               </div>
               <input
                 type="number"
-                step="any"
+                step={step || 'any'}
                 value={val}
                 onChange={(e) => handleChange(key, e.target.value)}
                 onBlur={() => handleBlur(key)}
