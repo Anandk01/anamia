@@ -44,11 +44,11 @@ export default function AdherenceChart({ data = [] }) {
             labelFormatter={(label) => `Date: ${label}`}
           />
           <ReferenceLine y={80} stroke="#6366f1" strokeDasharray="4 4" label="Target" />
-          <Bar dataKey="adherence_percent" radius={[4, 4, 0, 0]}>
+          {/* <Bar dataKey="adherence_percent" radius={[4, 4, 0, 0]}>
             {displayData.map((entry, idx) => (
               <Cell key={idx} fill={getBarColor(entry.adherence_percent)} />
             ))}
-          </Bar>
+          </Bar> */}
         </BarChart>
       </ResponsiveContainer>
     </div>

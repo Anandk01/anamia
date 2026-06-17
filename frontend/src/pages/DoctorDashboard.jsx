@@ -236,7 +236,7 @@ export default function DoctorDashboard() {
           <StatPill label="Patients" value={quickStats.my_patients || quickStats.total_patients || '—'} color="#6366f1" />
           <StatPill label="Pending Appts" value={badges.appointments || 0} color="#f59e0b" />
           <StatPill label="Critical Alerts" value={badges.alerts || 0} color="#ef4444" />
-          <StatPill label="Avg Adherence" value={quickStats.avg_adherence ? `${quickStats.avg_adherence}%` : '—'} color="#10b981" />
+          {/* <StatPill label="Avg Adherence" value={quickStats.avg_adherence ? `${quickStats.avg_adherence}%` : '—'} color="#10b981" /> */}
         </div>
 
         {/* Content */}
@@ -270,9 +270,9 @@ export default function DoctorDashboard() {
                 <div className="animate-slide-up animate-slide-up-delay-3">
                   <StatCard label="Severe Cases" value={quickStats.severe_cases || 0} icon={TrendingUp} color="#ef4444" sub="HGB < 8.0" />
                 </div>
-                <div className="animate-slide-up animate-slide-up-delay-3">
+                {/* <div className="animate-slide-up animate-slide-up-delay-3">
                   <StatCard label="Avg Adherence" value={quickStats.avg_adherence ? `${quickStats.avg_adherence}%` : '—'} icon={BarChart3} color="#10b981" />
-                </div>
+                </div> */}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

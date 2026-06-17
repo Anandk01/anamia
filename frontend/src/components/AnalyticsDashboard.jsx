@@ -68,7 +68,7 @@ export default function AnalyticsDashboard() {
       <div className="grid grid-cols-4 gap-4">
         <StatCard icon={Users} label="Total Patients" value={overview?.total_patients} color="#6366f1" />
         <StatCard icon={Brain} label="Predictions" value={overview?.total_predictions} color="#8b5cf6" />
-        <StatCard icon={TrendingUp} label="Avg Adherence" value={overview?.avg_adherence ? `${overview.avg_adherence}%` : '—'} color="#10b981" />
+        {/* <StatCard icon={TrendingUp} label="Avg Adherence" value={overview?.avg_adherence ? `${overview.avg_adherence}%` : '—'} color="#10b981" /> */}
         <StatCard icon={Calendar} label="Appointments" value={overview?.total_appointments} color="#f59e0b" />
       </div>
 

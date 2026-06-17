@@ -17,6 +17,7 @@ Return format:
 from __future__ import annotations
 
 import os
+import re
 import base64
 import logging
 from typing import Any
@@ -267,6 +268,58 @@ def _extract_fields(text: str) -> tuple[dict[str, float], dict[str, str], list[s
     return values, confidence, warnings
 
 
+def _run_tesseract_ocr(filepath: str, mime_type: str) -> dict:
+    """
+    Use Tesseract OCR to extract CBC values from the report file.
+    Falls back to regex extraction from OCR text.
+    """
+    import pytesseract
+    from PIL import Image
+
+    # Set Tesseract path
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+    try:
+        # For PDFs, convert first page to image
+        if mime_type == "application/pdf":
+            try:
+                import fitz
+                doc = fitz.open(filepath)
+                if doc.page_count == 0:
+                    return {"values": {}, "confidence": {}, "warnings": ["PDF has no pages"]}
+                page = doc[0]
+                pix = page.get_pixmap(dpi=200)
+                img_bytes = pix.tobytes("png")
+                doc.close()
+                # Load from bytes
+                import io
+                image = Image.open(io.BytesIO(img_bytes))
+            except Exception as e:
+                return {"values": {}, "confidence": {}, "warnings": [f"PDF processing failed: {str(e)}"]}
+        else:
+            # Direct image
+            image = Image.open(filepath)
+
+        # Run Tesseract OCR
+        text = pytesseract.image_to_string(image)
+        logger.info("Tesseract OCR extracted %d characters", len(text))
+
+        if not text.strip():
+            return {"values": {}, "confidence": {}, "warnings": ["Could not extract any text from the image"]}
+
+        # Use regex-based extraction
+        values, confidence, warnings = _extract_fields(text)
+
+        if not values:
+            warnings.append("Could not identify CBC values in the extracted text.")
+
+        return {"values": values, "confidence": confidence, "warnings": warnings}
+
+    except Exception as e:
+        logger.error("Tesseract OCR failed: %s", e)
+        return {"values": {}, "confidence": {}, "warnings": [f"OCR failed: {str(e)}"]}
+
+
 def extract_cbc_from_file(
     filepath: str,
     mime_type: str,
@@ -294,5 +347,5 @@ def extract_cbc_from_file(
         "warnings": [],
     }
 
-    # ── Step 1-3: Process with Gemini ─────────────────────────────────────────
-    return _run_gemini_ocr(filepath, mime_type)
+    # ── Use Tesseract OCR ─────────────────────────────────────────────────────
+    return _run_tesseract_ocr(filepath, mime_type)
