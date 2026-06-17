@@ -22,6 +22,9 @@ socketio = None
 
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
 
+# Store connected user info by session ID (avoids Flask session issues)
+_connected_users = {}
+
 
 def init_socketio(sio):
     """Register event handlers on the SocketIO instance."""
@@ -37,11 +40,11 @@ def init_socketio(sio):
             return False
         try:
             data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-            # Store user info in flask_socketio session (not request.environ)
-            from flask import session
-            session['ws_user'] = data.get('username') or data.get('sub')
-            session['ws_role'] = data.get('role')
-            logger.info("Client connected: %s", session.get('ws_user'))
+            # Store in module-level dict instead of session (avoids Flask version issues)
+            sid = getattr(request, 'sid', None)
+            if sid:
+                _connected_users[sid] = {'username': data.get('username') or data.get('sub'), 'role': data.get('role')}
+            logger.info("Client connected: %s", data.get('username') or data.get('sub'))
         except Exception as exc:
             logger.warning("WebSocket connection rejected: %s", exc)
             return False
