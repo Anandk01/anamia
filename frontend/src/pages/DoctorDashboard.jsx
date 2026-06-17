@@ -243,24 +243,46 @@ export default function DoctorDashboard() {
         <div id="main-content" className="flex-1 overflow-y-auto p-5">
           {/* Home */}
           {view === 'home' && (
-            <div className="space-y-5">
+            <div className="space-y-5 animate-slide-up">
+              {/* Welcome banner */}
+              <div className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 rounded-2xl p-6 text-white shadow-xl">
+                <h2 className="text-2xl font-bold">Good day, Dr. {username}! 🩺</h2>
+                <p className="text-emerald-100 mt-1 text-sm">Your clinical dashboard</p>
+                <div className="mt-3 flex gap-3">
+                  <span className="bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-medium">{badges.appointments || 0} pending appointments</span>
+                  <span className="bg-white/20 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-medium">{badges.alerts || 0} alerts</span>
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-4">
-                <StatCard label="Total Patients" value={quickStats.my_patients || quickStats.total_patients} icon={Users} color="#6366f1" />
-                <StatCard label="Predictions Today" value={quickStats.predictions_today || quickStats.total_predictions} icon={FlaskConical} color="#8b5cf6" />
-                <StatCard label="Critical Alerts" value={badges.alerts || 0} icon={Bell} color="#ef4444" />
-                <StatCard label="Pending Appointments" value={badges.appointments || 0} icon={Calendar} color="#f59e0b" />
-                <StatCard label="Severe Cases" value={quickStats.severe_cases || 0} icon={TrendingUp} color="#ef4444" sub="HGB < 8.0" />
-                <StatCard label="Avg Adherence" value={quickStats.avg_adherence ? `${quickStats.avg_adherence}%` : '—'} icon={BarChart3} color="#10b981" />
+                <div className="animate-slide-up animate-slide-up-delay-1">
+                  <StatCard label="Total Patients" value={quickStats.my_patients || quickStats.total_patients} icon={Users} color="#6366f1" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-1">
+                  <StatCard label="Predictions Today" value={quickStats.predictions_today || quickStats.total_predictions} icon={FlaskConical} color="#8b5cf6" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-2">
+                  <StatCard label="Critical Alerts" value={badges.alerts || 0} icon={Bell} color="#ef4444" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-2">
+                  <StatCard label="Pending Appointments" value={badges.appointments || 0} icon={Calendar} color="#f59e0b" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Severe Cases" value={quickStats.severe_cases || 0} icon={TrendingUp} color="#ef4444" sub="HGB < 8.0" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Avg Adherence" value={quickStats.avg_adherence ? `${quickStats.avg_adherence}%` : '—'} icon={BarChart3} color="#10b981" />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 {/* Today's Schedule */}
-                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                   <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Today's Schedule</p>
                   <DoctorSchedule compact />
                 </div>
                 {/* Critical Alerts */}
-                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                   <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Critical Alerts</p>
                   {alerts.filter(a => !a.read).slice(0, 4).map(alert => (
                     <div key={alert.alert_id} className="flex items-center gap-2 py-2 border-b border-slate-50 last:border-0">
@@ -277,16 +299,16 @@ export default function DoctorDashboard() {
 
               {/* Quick Actions */}
               <div className="grid grid-cols-4 gap-3">
-                <button onClick={() => setView('assessment')} className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-3 text-xs font-medium hover:scale-[1.02] transition-transform shadow-lg flex items-center gap-2">
+                <button onClick={() => setView('assessment')} className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl p-3 text-xs font-medium hover:scale-[1.02] transition-all duration-200 shadow-lg flex items-center gap-2">
                   <FlaskConical size={14} /> New Assessment
                 </button>
-                <button onClick={() => setView('prescribe')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
+                <button onClick={() => setView('prescribe')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-all duration-200 shadow-md flex items-center gap-2">
                   <FileText size={14} /> Prescribe
                 </button>
-                <button onClick={() => setView('schedule')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
+                <button onClick={() => setView('schedule')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-all duration-200 shadow-md flex items-center gap-2">
                   <Calendar size={14} /> Appointments
                 </button>
-                <button onClick={() => setView('records')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
+                <button onClick={() => setView('records')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 text-xs font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-all duration-200 shadow-md flex items-center gap-2">
                   <Users size={14} /> Records
                 </button>
               </div>

@@ -264,28 +264,50 @@ export default function PatientDashboard() {
         <div id="main-content" className="flex-1 overflow-y-auto p-5">
           {/* Home */}
           {view === 'home' && (
-            <div className="space-y-5">
+            <div className="space-y-5 animate-slide-up">
+              {/* Welcome banner */}
+              <div className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-6 text-white shadow-xl">
+                <h2 className="text-2xl font-bold">Welcome back, {username}! 👋</h2>
+                <p className="text-indigo-100 mt-1 text-sm">Your health dashboard at a glance</p>
+                {quickStats.last_hgb && (
+                  <div className="mt-3 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: quickStats.last_hgb >= 12 ? '#10b981' : quickStats.last_hgb >= 10 ? '#f59e0b' : '#ef4444' }} />
+                    <span className="text-sm font-medium">
+                      HGB: {quickStats.last_hgb} g/dL — {quickStats.last_hgb >= 12 ? 'Normal' : quickStats.last_hgb >= 10 ? 'Mild Anemia' : 'Needs Attention'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-4 gap-4">
-                <StatCard label="Total Tests" value={quickStats.total_tests} icon={FlaskConical} color="#6366f1" />
-                <StatCard label="Last HGB" value={quickStats.last_hgb ? `${quickStats.last_hgb} g/dL` : '—'} icon={TrendingUp} color="#10b981" />
-                <StatCard label="Adherence" value={quickStats.adherence ? `${quickStats.adherence}%` : '—'} icon={Pill} color="#f59e0b" />
-                <StatCard label="Appointments" value={badges.appointments || 0} icon={Calendar} color="#8b5cf6" />
+                <div className="animate-slide-up animate-slide-up-delay-1">
+                  <StatCard label="Total Tests" value={quickStats.total_tests} icon={FlaskConical} color="#6366f1" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-2">
+                  <StatCard label="Last HGB" value={quickStats.last_hgb ? `${quickStats.last_hgb} g/dL` : '—'} icon={TrendingUp} color="#10b981" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Adherence" value={quickStats.adherence ? `${quickStats.adherence}%` : '—'} icon={Pill} color="#f59e0b" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Appointments" value={badges.appointments || 0} icon={Calendar} color="#8b5cf6" />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                   <p className="text-xs font-semibold text-slate-500 uppercase mb-3">HGB Trend</p>
                   <HbTrendChart key={progressKey} username={username} compact />
                 </div>
-                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                   <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Today's Medications</p>
                   <MedicationTracker compact />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setView('appointments')} className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl p-4 text-sm font-medium hover:scale-[1.02] transition-transform shadow-lg flex items-center gap-2">
+                <button onClick={() => setView('appointments')} className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-2xl p-4 text-sm font-medium hover:scale-[1.02] transition-all duration-200 shadow-lg flex items-center gap-2">
                   <Calendar size={16} /> Book Appointment
                 </button>
-                <button onClick={() => setView('prescriptions')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-transform shadow-md flex items-center gap-2">
+                <button onClick={() => setView('prescriptions')} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-sm font-medium text-slate-700 dark:text-slate-200 hover:scale-[1.02] transition-all duration-200 shadow-md flex items-center gap-2">
                   <FileText size={16} /> View Prescriptions
                 </button>
               </div>

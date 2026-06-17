@@ -285,22 +285,48 @@ export default function AdminDashboard() {
         <div id="main-content" className="flex-1 overflow-y-auto p-5">
           {/* Overview */}
           {view === 'overview' && (
-            <div className="space-y-5">
+            <div className="space-y-5 animate-slide-up">
+              {/* Welcome banner */}
+              <div className="bg-gradient-to-r from-slate-700 via-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl border border-slate-600/30">
+                <h2 className="text-2xl font-bold">System Overview 🖥️</h2>
+                <p className="text-slate-300 mt-1 text-sm">AnemiaCare Administration Panel</p>
+                <div className="mt-3 flex gap-3">
+                  <span className="bg-emerald-500/20 border border-emerald-500/30 rounded-full px-3 py-1 text-xs font-medium text-emerald-300">System: Online</span>
+                  <span className="bg-indigo-500/20 border border-indigo-500/30 rounded-full px-3 py-1 text-xs font-medium text-indigo-300">{stats?.total_users || 0} users</span>
+                </div>
+              </div>
+
               {/* 8 stat cards in 2 rows */}
               <div className="grid grid-cols-4 gap-4">
-                <StatCard label="Total Predictions" value={stats?.total_predictions ?? 0} />
-                <StatCard label="Total Users" value={stats?.total_users ?? 0} />
-                <StatCard label="Anemia Cases" value={stats?.anemia_cases ?? 0} color="#ef4444" />
-                <StatCard label="Severe Cases" value={stats?.severe_cases ?? 0} color="#ef4444" sub="HGB < 8.0" />
-                <StatCard label="Alerts Sent" value={stats?.alerts_sent ?? 0} />
-                <StatCard label="Retraining Runs" value={stats?.retrain_count ?? 0} />
-                <StatCard label="Active Doctors" value={stats?.active_doctors ?? 0} color="#6366f1" />
-                <StatCard label="Avg Adherence" value={stats?.avg_adherence ? `${stats.avg_adherence}%` : '0%'} color="#10b981" />
+                <div className="animate-slide-up animate-slide-up-delay-1">
+                  <StatCard label="Total Predictions" value={stats?.total_predictions ?? 0} />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-1">
+                  <StatCard label="Total Users" value={stats?.total_users ?? 0} />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-2">
+                  <StatCard label="Anemia Cases" value={stats?.anemia_cases ?? 0} color="#ef4444" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-2">
+                  <StatCard label="Severe Cases" value={stats?.severe_cases ?? 0} color="#ef4444" sub="HGB < 8.0" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Alerts Sent" value={stats?.alerts_sent ?? 0} />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Retraining Runs" value={stats?.retrain_count ?? 0} />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Active Doctors" value={stats?.active_doctors ?? 0} color="#6366f1" />
+                </div>
+                <div className="animate-slide-up animate-slide-up-delay-3">
+                  <StatCard label="Avg Adherence" value={stats?.avg_adherence ? `${stats.avg_adherence}%` : '0%'} color="#10b981" />
+                </div>
               </div>
 
               {/* Full-width area chart */}
               {areaData.length > 0 && (
-                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Daily Predictions (30 days)</p>
                   <ResponsiveContainer width="100%" height={200}>
                     <AreaChart data={areaData}>
@@ -317,7 +343,7 @@ export default function AdminDashboard() {
               {/* 3-column chart row */}
               <div className="grid grid-cols-3 gap-4">
                 {severityPieData.length > 0 && (
-                  <div className="bg-white rounded-lg border border-slate-200 p-4">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                     <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Severity</p>
                     <ResponsiveContainer width="100%" height={160}>
                       <PieChart>
@@ -330,7 +356,7 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 {typePieData.length > 0 && (
-                  <div className="bg-white rounded-lg border border-slate-200 p-4">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                     <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Anemia Types</p>
                     <ResponsiveContainer width="100%" height={160}>
                       <PieChart>
@@ -344,7 +370,7 @@ export default function AdminDashboard() {
                   </div>
                 )}
                 {areaData.length > 0 && (
-                  <div className="bg-white rounded-lg border border-slate-200 p-4">
+                  <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                     <p className="text-xs font-semibold text-slate-500 uppercase mb-3">Weekly Volume</p>
                     <ResponsiveContainer width="100%" height={160}>
                       <BarChart data={areaData.slice(-7)}>
@@ -360,7 +386,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* System Health */}
-              <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-md">
                 <p className="text-xs font-semibold text-slate-500 uppercase mb-3">System Health</p>
                 <div className="grid grid-cols-4 gap-4">
                   <div className="flex items-center gap-2"><HealthDot label="Database" ok={health.db} /></div>

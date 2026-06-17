@@ -19,6 +19,19 @@
   50% { opacity: 0.6; transform: scale(1.1); }
 }
 
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out forwards;
+}
+
+.animate-slide-up-delay-1 { animation-delay: 0.1s; opacity: 0; }
+.animate-slide-up-delay-2 { animation-delay: 0.2s; opacity: 0; }
+.animate-slide-up-delay-3 { animation-delay: 0.3s; opacity: 0; }
+
 /* Prevent pull-to-refresh / overscroll bounce */
 html, body {
   overscroll-behavior: none;
