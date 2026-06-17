@@ -319,9 +319,6 @@ export default function AdminDashboard() {
                 <div className="animate-slide-up animate-slide-up-delay-3">
                   <StatCard label="Active Doctors" value={stats?.active_doctors ?? 0} color="#6366f1" />
                 </div>
-                <div className="animate-slide-up animate-slide-up-delay-3">
-                  <StatCard label="Avg Adherence" value={stats?.avg_adherence ? `${stats.avg_adherence}%` : '0%'} color="#10b981" />
-                </div>
               </div>
 
               {/* Full-width area chart */}
