@@ -124,7 +124,7 @@ Only include numeric values. If a value is not found, omit the key."""
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.2-11b-vision-preview",
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[
                 {
                     "role": "user",
