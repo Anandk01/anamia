@@ -197,6 +197,13 @@ export default function AdminDashboard() {
     } catch {}
   }
 
+  async function handleReactivate(userId) {
+    try {
+      await client.patch(`/api/users/${userId}/reactivate`);
+      setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, status: 'active' } : u));
+    } catch {}
+  }
+
   async function handleCreateUser(e) {
     e.preventDefault();
     setCreateLoading(true); setCreateError(null);
@@ -392,7 +399,10 @@ export default function AdminDashboard() {
                         <td className="px-3 py-2 text-slate-500 text-xs">{u.email}</td>
                         <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium">{u.role}</span></td>
                         <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{u.status}</span></td>
-                        <td className="px-3 py-2">{u.status === 'active' && <button onClick={() => handleDeactivate(u.user_id)} className="text-xs text-red-600 hover:text-red-800 font-medium">Deactivate</button>}</td>
+                        <td className="px-3 py-2">
+                          {u.status === 'active' && <button onClick={() => handleDeactivate(u.user_id)} className="text-xs text-red-600 hover:text-red-800 font-medium">Deactivate</button>}
+                          {u.status === 'inactive' && <button onClick={() => handleReactivate(u.user_id)} className="text-xs text-green-600 hover:text-green-800 font-medium">Reactivate</button>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

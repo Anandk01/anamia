@@ -529,6 +529,34 @@ def deactivate_user(user_id: int):
 
 
 # ---------------------------------------------------------------------------
+# PATCH /api/users/<id>/reactivate (Admin only)
+# ---------------------------------------------------------------------------
+
+@admin_bp.patch("/users/<int:user_id>/reactivate")
+@require_auth
+@require_role("admin")
+def reactivate_user(user_id: int):
+    """Set a user's status back to 'active'."""
+    conn = get_db()
+    try:
+        target = conn.execute(
+            "SELECT user_id, username, status FROM user WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if target is None:
+            return jsonify({"status": "error", "message": "User not found."}), 404
+        if target["status"] == "active":
+            return jsonify({"status": "error", "message": "User is already active."}), 400
+
+        conn.execute("UPDATE user SET status = 'active' WHERE user_id = ?", (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"status": "ok", "message": f"User '{target['username']}' has been reactivated."}), 200
+
+
+# ---------------------------------------------------------------------------
 # Doctor-Patient Assignment endpoints
 # ---------------------------------------------------------------------------
 
