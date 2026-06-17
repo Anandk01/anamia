@@ -100,7 +100,7 @@ def _get_image_from_file(filepath: str, mime_type: str):
 
 def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
     """
-    Use Groq AI to extract CBC values from the report file.
+    Use Groq AI (Llama 4 Scout) to extract CBC values from the report file.
     Returns a dict with 'values', 'confidence', and 'warnings'.
     """
     from openai import OpenAI
@@ -113,10 +113,30 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
 
     client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
 
-    # Read and encode file
+    # For PDFs, convert first page to image
+    if mime_type == "application/pdf":
+        try:
+            from pdf2image import convert_from_path
+            images = convert_from_path(image_path, first_page=1, last_page=1)
+            if images:
+                import tempfile
+                tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                images[0].save(tmp.name, "JPEG")
+                image_path = tmp.name
+                mime_type = "image/jpeg"
+            else:
+                return {"values": {}, "confidence": {}, "warnings": ["Failed to convert PDF to image"]}
+        except Exception as e:
+            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed: {str(e)}"]}
+
+    # Read and encode file as base64
     with open(image_path, "rb") as f:
         file_data = f.read()
     b64_data = base64.b64encode(file_data).decode("utf-8")
+
+    # Ensure mime type is image
+    if mime_type not in ("image/jpeg", "image/png", "image/jpg", "image/webp"):
+        mime_type = "image/jpeg"
 
     prompt = """Extract Complete Blood Count (CBC) values from this lab report image.
 Return ONLY a JSON object with these keys: rbc, mcv, mch, mchc, rdw, tlc, plt, hgb.
@@ -140,7 +160,6 @@ Only include numeric values. If a value is not found, omit the key."""
         raw_text = response.choices[0].message.content.strip()
 
         # Parse JSON from response
-        # Handle markdown code blocks
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
         elif "```" in raw_text:
