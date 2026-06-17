@@ -37,9 +37,11 @@ def init_socketio(sio):
             return False
         try:
             data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-            request.environ['user'] = data.get('username') or data.get('sub')
-            request.environ['role'] = data.get('role')
-            logger.info("Client connected: %s", request.environ['user'])
+            # Store user info in flask_socketio session (not request.environ)
+            from flask import session
+            session['ws_user'] = data.get('username') or data.get('sub')
+            session['ws_role'] = data.get('role')
+            logger.info("Client connected: %s", session.get('ws_user'))
         except Exception as exc:
             logger.warning("WebSocket connection rejected: %s", exc)
             return False
