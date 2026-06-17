@@ -134,15 +134,23 @@ def chat_with_gemini(message: str, session_id: str) -> dict:
     # --- Call Gemini using new SDK ---
     try:
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-2.0-flash",
             contents=prompt,
         )
         bot_response = response.text.strip()
     except Exception as exc:
-        logger.error("Gemini API call failed: %s", exc)
-        return {
-            "response": "I'm having trouble connecting to the AI service. Please try again in a moment.",
-            "intent": "error",
+        # Retry with fallback model
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-lite",
+                contents=prompt,
+            )
+            bot_response = response.text.strip()
+        except Exception as exc2:
+            logger.error("Gemini API call failed: %s / %s", exc, exc2)
+            return {
+                "response": "I'm having trouble connecting to the AI service. Please try again in a moment.",
+                "intent": "error",
             "sources": [],
         }
 
