@@ -119,7 +119,7 @@ def generate_ai_report(prediction_result: dict, username: str) -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.5-flash",
             contents=prompt,
         )
         ai_report = response.text.strip()

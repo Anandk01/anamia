@@ -134,7 +134,7 @@ def chat_with_gemini(message: str, session_id: str) -> dict:
     # --- Call Gemini using new SDK ---
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.5-flash",
             contents=prompt,
         )
         bot_response = response.text.strip()
@@ -142,7 +142,7 @@ def chat_with_gemini(message: str, session_id: str) -> dict:
         # Retry with fallback model
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash-lite",
+                model="gemini-2.0-flash",
                 contents=prompt,
             )
             bot_response = response.text.strip()

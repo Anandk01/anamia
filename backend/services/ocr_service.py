@@ -148,7 +148,7 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-3.5-flash",
             contents=[
                 prompt,
                 types.Part.from_bytes(data=file_data, mime_type=mime_type)

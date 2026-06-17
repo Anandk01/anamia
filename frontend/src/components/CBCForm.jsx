@@ -55,6 +55,15 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
   }
 
   function handleChange(key, value) {
+    // Enforce decimal places based on field step
+    const field = FIELDS.find(f => f.key === key);
+    if (field && value !== '' && value !== '-') {
+      const decimals = field.step === '0.01' ? 2 : field.step === '0.1' ? 1 : 0;
+      const parts = value.split('.');
+      if (parts.length > 1 && parts[1].length > decimals) {
+        value = parts[0] + '.' + parts[1].slice(0, decimals);
+      }
+    }
     setForm((prev) => ({ ...prev, [key]: value }));
     setTouched((prev) => ({ ...prev, [key]: true }));
   }
