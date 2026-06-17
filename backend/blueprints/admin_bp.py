@@ -124,12 +124,12 @@ def get_stats():
     try:
         # --- Total users ---
         total_users = conn.execute(
-            "SELECT COUNT(*) FROM user"
+            'SELECT COUNT(*) FROM "user"'
         ).fetchone()[0]
 
         # --- Active doctors ---
         active_doctors = conn.execute(
-            "SELECT COUNT(*) FROM user WHERE role = 'doctor' AND status = 'active'"
+            "SELECT COUNT(*) FROM \"user\" WHERE role = 'doctor' AND status = 'active'"
         ).fetchone()[0]
 
         # --- Total predictions ---

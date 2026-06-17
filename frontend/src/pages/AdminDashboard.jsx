@@ -148,16 +148,16 @@ export default function AdminDashboard() {
         // Map backend field names to what the overview expects
         setStats({
           total_predictions: s.total_predictions || 0,
-          total_users: (s.users_by_role?.patient || 0) + (s.users_by_role?.doctor || 0) + (s.users_by_role?.admin || 0),
-          anemia_cases: Object.entries(s.predictions_by_severity || {}).filter(([k]) => k !== 'None').reduce((sum, [, v]) => sum + v, 0),
-          severe_cases: s.predictions_by_severity?.Severe || 0,
-          alerts_sent: s.total_alerts_sent || 0,
+          total_users: s.total_users || 0,
+          anemia_cases: s.anemia_cases || 0,
+          severe_cases: s.severe_cases || 0,
+          alerts_sent: s.alerts_sent || 0,
           retrain_count: s.retrain_count || 0,
-          active_doctors: s.users_by_role?.doctor || 0,
+          active_doctors: s.active_doctors || 0,
           avg_adherence: s.avg_adherence || null,
-          severity_distribution: s.predictions_by_severity || {},
-          type_distribution: s.predictions_by_type || {},
-          daily_predictions: s.predictions_per_day || [],
+          severity_distribution: s.severity_distribution || {},
+          type_distribution: s.type_distribution || {},
+          daily_predictions: s.daily_predictions || [],
         });
       }).catch(() => setStats({}));
     }
