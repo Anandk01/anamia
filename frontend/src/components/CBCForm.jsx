@@ -55,13 +55,29 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
   }
 
   function handleChange(key, value) {
-    // Enforce decimal places based on field step
     const field = FIELDS.find(f => f.key === key);
-    if (field && value !== '' && value !== '-') {
+    if (field && value !== '') {
+      // Prevent negative numbers
+      if (value.startsWith('-')) return;
+
       const decimals = field.step === '0.01' ? 2 : field.step === '0.1' ? 1 : 0;
       const parts = value.split('.');
+      
+      // Limit integer digits
+      const maxIntDigits = String(field.max).length;
+      if (parts[0].length > maxIntDigits) {
+        return;
+      }
+
+      // Enforce decimal places
       if (parts.length > 1 && parts[1].length > decimals) {
         value = parts[0] + '.' + parts[1].slice(0, decimals);
+      }
+
+      // Block values greater than max
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue) && numValue > field.max) {
+        return;
       }
     }
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -158,7 +174,7 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
 
       {/* 2-column grid */}
       <div className="grid grid-cols-2 gap-3">
-        {FIELDS.map(({ key, label, unit, ref: refRange, step }) => {
+        {FIELDS.map(({ key, label, unit, ref: refRange, step, min, max }) => {
           const val = displayValues[key];
           const err = touched[key] ? validateField(key, val) : null;
           const conf = confidence[key.toLowerCase()] || ocrConfidence?.[key.toLowerCase()];
@@ -186,6 +202,8 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
               <input
                 type="number"
                 step={step || 'any'}
+                min={min}
+                max={max}
                 value={val}
                 onChange={(e) => handleChange(key, e.target.value)}
                 onBlur={() => handleBlur(key)}
