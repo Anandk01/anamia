@@ -1,5 +1,5 @@
 """
-gemini_report_service.py — AI report generation using google-genai with gemini-3.5-flash.
+gemini_report_service.py — AI report generation using google-genai with gemini-2.5-flash.
 """
 
 import logging
@@ -66,7 +66,7 @@ def generate_ai_report(prediction_result: dict, username: str) -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
         )
         ai_report = response.text.strip()

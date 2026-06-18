@@ -154,9 +154,8 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* OCR upload row */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">CBC Parameters</span>
-        {/* OCR Disabled for now
         <div className="flex items-center gap-2">
           {ocrError && <span className="text-xs text-red-500">{ocrError}</span>}
           <button
@@ -171,7 +170,6 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
           </button>
           <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleOcrUpload} />
         </div>
-        */}
       </div>
 
       {/* 2-column grid */}

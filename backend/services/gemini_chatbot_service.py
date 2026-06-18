@@ -1,6 +1,6 @@
 """
 gemini_chatbot_service.py — Gemini-powered RAG chatbot for anemia Q&A.
-Uses google-genai SDK with gemini-3.5-flash model.
+Uses google-genai SDK with gemini-2.5-flash model.
 """
 
 import logging
@@ -90,7 +90,7 @@ def chat_with_gemini(message: str, session_id: str) -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-2.5-flash",
             contents=full_prompt,
         )
         bot_response = response.text.strip()

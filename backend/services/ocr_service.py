@@ -153,7 +153,7 @@ Omit keys if not found."""
 
     try:
         response = client.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-2.5-flash",
             contents=[
                 prompt,
                 types.Part.from_bytes(data=file_data, mime_type=mime_type),
@@ -347,5 +347,5 @@ def extract_cbc_from_file(
         "warnings": [],
     }
 
-    # ── Use Tesseract OCR ─────────────────────────────────────────────────────
-    return _run_tesseract_ocr(filepath, mime_type)
+    # ── Use Gemini OCR ────────────────────────────────────────────────────────
+    return _run_gemini_ocr(filepath, mime_type)
