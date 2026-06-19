@@ -121,11 +121,13 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
         return {"values": {}, "confidence": {}, "warnings": ["File too large (>10MB)"]}
 
     # Detect mime from bytes if needed
-    if mime_type not in ("image/jpeg", "image/png", "image/webp"):
+    if mime_type not in ("image/jpeg", "image/png", "image/webp", "application/pdf"):
         if file_data[:3] == b'\xff\xd8\xff':
             mime_type = "image/jpeg"
         elif file_data[:8] == b'\x89PNG\r\n\x1a\n':
             mime_type = "image/png"
+        elif file_data[:4] == b'%PDF':
+            mime_type = "application/pdf"
         else:
             mime_type = "image/jpeg"
 
