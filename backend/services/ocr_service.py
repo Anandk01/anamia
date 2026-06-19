@@ -111,25 +111,7 @@ def _run_gemini_ocr(image_path: str, mime_type: str) -> dict:
     from google.genai import types
     client = genai.Client(api_key=api_key)
 
-    # For PDFs, convert to image first
-    if mime_type == "application/pdf":
-        try:
-            import fitz
-            doc = fitz.open(image_path)
-            if doc.page_count == 0:
-                return {"values": {}, "confidence": {}, "warnings": ["PDF has no pages"]}
-            page = doc[0]
-            pix = page.get_pixmap(dpi=150)
-            img_bytes = pix.tobytes("jpeg")
-            doc.close()
-            import tempfile
-            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False, dir=os.path.dirname(image_path))
-            tmp.write(img_bytes)
-            tmp.close()
-            image_path = tmp.name
-            mime_type = "image/jpeg"
-        except Exception as e:
-            return {"values": {}, "confidence": {}, "warnings": [f"PDF conversion failed: {e}"]}
+
 
     # Read file
     with open(image_path, "rb") as f:
