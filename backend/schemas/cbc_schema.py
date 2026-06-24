@@ -80,4 +80,8 @@ def validate_cbc(data: Dict[str, Any]) -> Tuple[Dict[str, float], List[str]]:
     if errors:
         return {}, errors
 
+    # Reject all-zero submissions — clinically impossible
+    if all(v == 0 for v in result.values()):
+        return {}, ["All CBC values cannot be zero. Please enter valid lab results."]
+
     return result, []

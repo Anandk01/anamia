@@ -36,8 +36,6 @@ export default function NotificationBell() {
       client.get('/api/notifications', { params: { page: 1, limit: 5 } })
         .then(res => setNotifications(res.data?.notifications || []))
         .catch(() => {});
-      // Mark all as read when dropdown opens
-      client.put('/api/notifications/read-all').then(() => setUnreadCount(0)).catch(() => {});
     }
   }, [open]);
 
@@ -68,7 +66,19 @@ export default function NotificationBell() {
         <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-700">Notifications</span>
-            <span className="text-xs text-slate-400">{unreadCount} unread</span>
+            {unreadCount > 0 && (
+              <button
+                onClick={() => {
+                  client.put('/api/notifications/read-all').then(() => {
+                    setUnreadCount(0);
+                    setNotifications(prev => prev.map(n => ({ ...n, read: 1 })));
+                  }).catch(() => {});
+                }}
+                className="text-xs text-indigo-600 font-medium hover:text-indigo-800"
+              >
+                Mark all read
+              </button>
+            )}
           </div>
           <div className="max-h-72 overflow-y-auto">
             {notifications.length === 0 && (
@@ -77,7 +87,21 @@ export default function NotificationBell() {
             {notifications.map(n => {
               const Icon = TYPE_ICONS[n.type] || TYPE_ICONS.default;
               return (
-                <div key={n.id || n.notification_id} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 border-b border-slate-50">
+                <div
+                  key={n.id || n.notification_id}
+                  className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 border-b border-slate-50 cursor-pointer"
+                  onClick={() => {
+                    if (!n.read) {
+                      const nId = n.notification_id || n.id;
+                      client.put(`/api/notifications/${nId}/read`).then(() => {
+                        setNotifications(prev => prev.map(item =>
+                          (item.notification_id || item.id) === nId ? { ...item, read: 1 } : item
+                        ));
+                        setUnreadCount(prev => Math.max(0, prev - 1));
+                      }).catch(() => {});
+                    }
+                  }}
+                >
                   <Icon size={16} className="text-indigo-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-slate-700 font-medium truncate">{n.title}</p>

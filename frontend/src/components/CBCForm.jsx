@@ -42,6 +42,7 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState(null);
   const [confidence, setConfidence] = useState({});
+  const [submitError, setSubmitError] = useState(null);
   const fileRef = useRef(null);
 
   // Merge OCR values when they arrive
@@ -136,6 +137,7 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
 
   function handleSubmit(e) {
     e.preventDefault();
+    setSubmitError(null);
     // Mark all touched
     const allTouched = Object.fromEntries(FIELDS.map((f) => [f.key, true]));
     setTouched(allTouched);
@@ -146,6 +148,14 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
     const cbcData = Object.fromEntries(
       FIELDS.map((f) => [f.key, parseFloat(displayValues[f.key])])
     );
+
+    // Reject if all values are zero — clinically impossible
+    const allZero = Object.values(cbcData).every((v) => v === 0);
+    if (allZero) {
+      setSubmitError('All CBC values cannot be zero. Please enter valid lab results.');
+      return;
+    }
+
     onSubmit(cbcData);
   }
 
@@ -219,6 +229,10 @@ export default function CBCForm({ onSubmit, loading, ocrValues, ocrConfidence })
           );
         })}
       </div>
+
+      {submitError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{submitError}</p>
+      )}
 
       <button
         type="submit"
